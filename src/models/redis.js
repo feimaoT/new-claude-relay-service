@@ -839,6 +839,24 @@ class RedisClient {
             (k.name && k.name.toLowerCase().includes(lowerSearch)) ||
             (k.ownerDisplayName && k.ownerDisplayName.toLowerCase().includes(lowerSearch))
         )
+      } else if (searchMode === 'keyValue') {
+        // keyValue 模式：按完整key值搜索（验证哈希）
+        const apiKeyService = require('../services/apiKeyService')
+        try {
+          // 验证输入的key是否存在
+          const verifiedKey = await apiKeyService.verifyApiKey(search)
+          if (verifiedKey && verifiedKey.id) {
+            // 找到匹配的key，只返回这一个
+            filteredKeys = filteredKeys.filter((k) => k.id === verifiedKey.id)
+          } else {
+            // 没找到匹配的key，返回空
+            filteredKeys = []
+          }
+        } catch (err) {
+          // 验证失败，返回空
+          logger.warn('⚠️ Key value search failed:', err.message)
+          filteredKeys = []
+        }
       } else if (searchMode === 'bindingAccount') {
         // bindingAccount 模式：直接在Redis层处理，避免路由层加载10000条
         const accountNameCacheService = require('../services/accountNameCacheService')
