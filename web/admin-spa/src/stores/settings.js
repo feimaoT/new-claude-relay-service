@@ -9,6 +9,7 @@ export const useSettingsStore = defineStore('settings', () => {
     siteName: 'Claude Relay Service',
     siteIcon: '',
     siteIconData: '',
+    popupImageData: '',
     showAdminButton: true,
     apiStatsNotice: { enabled: false, title: '', content: '' },
     updatedAt: null
@@ -45,6 +46,7 @@ export const useSettingsStore = defineStore('settings', () => {
       siteName: 'Claude Relay Service',
       siteIcon: '',
       siteIconData: '',
+      popupImageData: '',
       showAdminButton: true,
       apiStatsNotice: { enabled: false, title: '', content: '' },
       updatedAt: null
@@ -116,6 +118,27 @@ export const useSettingsStore = defineStore('settings', () => {
     })
   }
 
+  // 验证弹窗图片文件
+  const validatePopupImageFile = (file) => {
+    const errors = []
+
+    // 检查文件大小 (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      errors.push('弹窗图片大小不能超过 5MB')
+    }
+
+    // 检查文件类型
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      errors.push('不支持的文件类型，请选择 .png, .jpg 或 .webp 文件')
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors
+    }
+  }
+
   return {
     // State
     oemSettings,
@@ -129,6 +152,7 @@ export const useSettingsStore = defineStore('settings', () => {
     applyOemSettings,
     formatDateTime,
     validateIconFile,
+    validatePopupImageFile,
     fileToBase64
   }
 })

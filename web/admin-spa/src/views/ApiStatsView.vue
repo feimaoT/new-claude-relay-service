@@ -521,6 +521,15 @@
         </div>
       </Transition>
     </Teleport>
+
+    <!-- 图片弹窗 -->
+    <PopupImageModal
+      :image-url="oemSettings.popupImageData"
+      :show="showPopupImage"
+      @close="closePopupImage"
+      @dont-show-again="dontShowPopupAgain"
+      @error="handlePopupImageError"
+    />
   </div>
 </template>
 
@@ -543,6 +552,7 @@ import ModelUsageStats from '@/components/apistats/ModelUsageStats.vue'
 import ServiceCostCards from '@/components/apistats/ServiceCostCards.vue'
 import TutorialView from './TutorialView.vue'
 import ApiKeyTestModal from '@/components/apikeys/ApiKeyTestModal.vue'
+import PopupImageModal from '@/components/common/PopupImageModal.vue'
 
 const route = useRoute()
 const apiStatsStore = useApiStatsStore()
@@ -585,6 +595,10 @@ const testServiceType = ref('claude')
 const showNotice = ref(false)
 const dontShowAgain = ref(false)
 const NOTICE_STORAGE_KEY = 'apiStatsNoticeRead'
+
+// 图片弹窗状态
+const showPopupImage = ref(false)
+const POPUP_IMAGE_STORAGE_KEY = 'popupImageHiddenUntil'
 
 // 额度卡兑换相关状态
 const quotaSubTab = ref('redeem')
@@ -749,6 +763,51 @@ const checkNotice = () => {
   }
 }
 
+// 检查是否显示图片弹窗
+const checkPopupImage = () => {
+  // 检查是否有弹窗图片
+  if (!oemSettings.value?.popupImageData) {
+    return
+  }
+
+  // 检查 localStorage 中是否有"不再显示"的记录
+  const hiddenUntilStr = localStorage.getItem(POPUP_IMAGE_STORAGE_KEY)
+  if (hiddenUntilStr) {
+    const hiddenUntil = parseInt(hiddenUntilStr, 10)
+    const now = Date.now()
+    if (now < hiddenUntil) {
+      // 还在"不再显示"的期限内
+      return
+    } else {
+      // 过期了，清除记录
+      localStorage.removeItem(POPUP_IMAGE_STORAGE_KEY)
+    }
+  }
+
+  // 显示弹窗
+  showPopupImage.value = true
+}
+
+// 关闭图片弹窗
+const closePopupImage = () => {
+  showPopupImage.value = false
+}
+
+// 3天不再弹出
+const dontShowPopupAgain = () => {
+  const threeDaysInMs = 3 * 24 * 60 * 60 * 1000
+  const hiddenUntil = Date.now() + threeDaysInMs
+  localStorage.setItem(POPUP_IMAGE_STORAGE_KEY, hiddenUntil.toString())
+  showPopupImage.value = false
+  showToast('已设置3天内不再弹出', 'success')
+}
+
+// 处理图片加载错误
+const handlePopupImageError = () => {
+  showPopupImage.value = false
+  // Image load failed, silently close popup
+}
+
 // 点击外部关闭菜单
 const handleClickOutside = (event) => {
   if (showTestMenu.value && !event.target.closest('.relative')) {
@@ -782,6 +841,7 @@ onMounted(async () => {
   // 加载 OEM 设置和服务倍率
   await Promise.all([loadOemSettings(), loadServiceRates()])
   checkNotice()
+  checkPopupImage()
 
   // 检查 URL 参数
   const urlApiId = route.query.apiId

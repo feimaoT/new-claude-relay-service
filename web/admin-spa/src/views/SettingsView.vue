@@ -171,6 +171,69 @@
                   </td>
                 </tr>
 
+                <!-- 开启弹窗图片 -->
+                <tr class="table-row">
+                  <td class="w-48 whitespace-nowrap px-6 py-4">
+                    <div class="flex items-center">
+                      <div
+                        class="mr-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-pink-500 to-rose-600"
+                      >
+                        <i class="fas fa-image text-xs text-white" />
+                      </div>
+                      <div>
+                        <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                          开启弹窗图片
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400">启动弹窗</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="px-6 py-4">
+                    <div class="space-y-3">
+                      <!-- 图片预览 -->
+                      <div
+                        v-if="oemSettings.popupImageData"
+                        class="inline-flex items-center gap-3 rounded-lg bg-gray-50 p-3 dark:bg-gray-700"
+                      >
+                        <img
+                          alt="弹窗图片预览"
+                          class="h-20 w-auto max-w-xs rounded-lg object-contain"
+                          :src="oemSettings.popupImageData"
+                          @error="handlePopupImageError"
+                        />
+                        <span class="text-sm text-gray-600 dark:text-gray-400">当前图片</span>
+                        <button
+                          class="rounded-lg px-3 py-1 font-medium text-red-600 transition-colors hover:bg-red-50 hover:text-red-900 dark:hover:bg-red-900/20"
+                          @click="removePopupImage"
+                        >
+                          <i class="fas fa-trash mr-1" />删除
+                        </button>
+                      </div>
+
+                      <!-- 文件上传 -->
+                      <div>
+                        <input
+                          ref="popupImageFileInput"
+                          accept=".png,.jpg,.jpeg,.webp"
+                          class="hidden"
+                          type="file"
+                          @change="handlePopupImageUpload"
+                        />
+                        <button
+                          class="btn btn-success px-4 py-2"
+                          @click="$refs.popupImageFileInput.click()"
+                        >
+                          <i class="fas fa-upload mr-2" />
+                          上传图片
+                        </button>
+                        <span class="ml-3 text-xs text-gray-500 dark:text-gray-400"
+                          >支持 .png, .jpg, .webp 格式，最大 5MB</span
+                        >
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+
                 <!-- 管理后台按钮显示控制 -->
                 <tr class="table-row">
                   <td class="w-48 whitespace-nowrap px-6 py-4">
@@ -386,6 +449,67 @@
                   </button>
                   <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
                     支持 .ico, .png, .jpg, .svg 格式，最大 350KB
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- 开启弹窗图片卡片 -->
+            <div class="glass-card p-4">
+              <div class="mb-3 flex items-center gap-3">
+                <div
+                  class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-pink-500 to-rose-600 text-white shadow-md"
+                >
+                  <i class="fas fa-image"></i>
+                </div>
+                <div>
+                  <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+                    开启弹窗图片
+                  </h3>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">上传启动弹窗展示图片</p>
+                </div>
+              </div>
+              <div class="space-y-3">
+                <!-- 图片预览 -->
+                <div
+                  v-if="oemSettings.popupImageUrl"
+                  class="inline-flex flex-col items-start gap-3 rounded-lg bg-gray-50 p-3 dark:bg-gray-700"
+                >
+                  <img
+                    alt="弹窗图片预览"
+                    class="h-auto w-full max-w-full rounded-lg object-contain"
+                    :src="oemSettings.popupImageUrl"
+                    @error="handlePopupImageError"
+                  />
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">当前图片</span>
+                    <button
+                      class="rounded-lg px-3 py-1 font-medium text-red-600 transition-colors hover:bg-red-50 hover:text-red-900 dark:hover:bg-red-900/20"
+                      @click="removePopupImage"
+                    >
+                      删除
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 上传按钮 -->
+                <div>
+                  <input
+                    ref="popupImageFileInputMobile"
+                    accept=".png,.jpg,.jpeg,.webp"
+                    class="hidden"
+                    type="file"
+                    @change="handlePopupImageUpload"
+                  />
+                  <button
+                    class="btn btn-success px-4 py-2"
+                    @click="$refs.popupImageFileInputMobile.click()"
+                  >
+                    <i class="fas fa-upload mr-2" />
+                    上传图片
+                  </button>
+                  <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    支持 .png, .jpg, .webp 格式，最大 5MB
                   </p>
                 </div>
               </div>
@@ -2808,6 +2932,7 @@ const saveOemSettings = async () => {
       siteName: oemSettings.value.siteName,
       siteIcon: oemSettings.value.siteIcon,
       siteIconData: oemSettings.value.siteIconData,
+      popupImageData: oemSettings.value.popupImageData,
       showAdminButton: oemSettings.value.showAdminButton,
       apiStatsNotice: oemSettings.value.apiStatsNotice
     }
@@ -2879,7 +3004,43 @@ const removeIcon = () => {
 
 // 处理图标加载错误
 const handleIconError = () => {
-  console.warn('Icon failed to load')
+  // Icon load failed, handled silently
+}
+
+// 处理弹窗图片上传（和网站图标逻辑一致）
+const handlePopupImageUpload = async (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+
+  // 验证文件
+  const validation = settingsStore.validatePopupImageFile(file)
+  if (!validation.isValid) {
+    validation.errors.forEach((error) => showToast(error, 'error'))
+    return
+  }
+
+  try {
+    // 转换为Base64
+    const base64Data = await settingsStore.fileToBase64(file)
+    oemSettings.value.popupImageData = base64Data
+    showToast('弹窗图片上传成功，请点击"保存设置"', 'success')
+  } catch (error) {
+    showToast('文件读取失败', 'error')
+  }
+
+  // 清除input的值，允许重复选择同一文件
+  event.target.value = ''
+}
+
+// 删除弹窗图片（和网站图标逻辑一致）
+const removePopupImage = () => {
+  oemSettings.value.popupImageData = ''
+  showToast('弹窗图片已删除，请点击"保存设置"', 'info')
+}
+
+// 处理弹窗图片加载错误
+const handlePopupImageError = () => {
+  // Popup image load failed, handled silently
 }
 
 // 格式化日期时间

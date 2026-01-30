@@ -266,6 +266,7 @@ router.get('/oem-settings', async (req, res) => {
       siteName: 'Claude Relay Service',
       siteIcon: '',
       siteIconData: '', // Base64编码的图标数据
+      popupImageData: '', // Base64编码的弹窗图片数据
       showAdminButton: true, // 是否显示管理后台按钮
       apiStatsNotice: {
         enabled: false,
@@ -279,9 +280,15 @@ router.get('/oem-settings', async (req, res) => {
     if (oemSettings) {
       try {
         settings = { ...defaultSettings, ...JSON.parse(oemSettings) }
+        // 调试日志：记录是否有 popupImageData
+        logger.info(
+          `📥 OEM Settings loaded - popupImageData: ${settings.popupImageData ? `exists (${settings.popupImageData.length} chars)` : 'empty'}`
+        )
       } catch (err) {
         logger.warn('⚠️ Failed to parse OEM settings, using defaults:', err.message)
       }
+    } else {
+      logger.info('📥 OEM Settings - using defaults (no data in Redis)')
     }
 
     // 添加 LDAP 启用状态到响应中
@@ -301,7 +308,8 @@ router.get('/oem-settings', async (req, res) => {
 // 更新OEM设置
 router.put('/oem-settings', authenticateAdmin, async (req, res) => {
   try {
-    const { siteName, siteIcon, siteIconData, showAdminButton, apiStatsNotice } = req.body
+    const { siteName, siteIcon, siteIconData, popupImageData, showAdminButton, apiStatsNotice } =
+      req.body
 
     // 验证输入
     if (!siteName || typeof siteName !== 'string' || siteName.trim().length === 0) {
@@ -318,6 +326,12 @@ router.put('/oem-settings', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Icon file must be less than 350KB' })
     }
 
+    // 验证弹窗图片数据大小（如果是base64）
+    if (popupImageData && popupImageData.length > 7000000) {
+      // 约5MB (base64编码后会比原文件大约33%)
+      return res.status(400).json({ error: 'Popup image file must be less than 5MB' })
+    }
+
     // 验证图标URL（如果提供）
     if (siteIcon && !siteIconData) {
       // 简单验证URL格式
@@ -332,6 +346,7 @@ router.put('/oem-settings', authenticateAdmin, async (req, res) => {
       siteName: siteName.trim(),
       siteIcon: (siteIcon || '').trim(),
       siteIconData: (siteIconData || '').trim(), // Base64数据
+      popupImageData: (popupImageData || '').trim(), // Base64数据
       showAdminButton: showAdminButton !== false, // 默认为true
       apiStatsNotice: {
         enabled: apiStatsNotice?.enabled === true,
@@ -344,6 +359,10 @@ router.put('/oem-settings', authenticateAdmin, async (req, res) => {
     const client = redis.getClient()
     await client.set('oem:settings', JSON.stringify(settings))
 
+    // 调试日志：记录保存的数据
+    logger.info(
+      `💾 OEM settings saved - popupImageData: ${settings.popupImageData ? `saved (${settings.popupImageData.length} chars)` : 'empty'}`
+    )
     logger.info(`✅ OEM settings updated: ${siteName}`)
 
     return res.json({
