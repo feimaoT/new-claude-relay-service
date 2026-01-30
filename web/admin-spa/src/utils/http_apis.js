@@ -55,6 +55,21 @@ export const updateApiKeyApi = (id, data) =>
 export const toggleApiKeyApi = (id) =>
   request({ url: `/admin/api-keys/${id}/toggle`, method: 'PUT' })
 export const deleteApiKeyApi = (id) => request({ url: `/admin/api-keys/${id}`, method: 'DELETE' })
+
+// API Key Templates
+export const getApiKeyTemplatesApi = () =>
+  request({ url: '/admin/api-key-templates', method: 'GET' })
+export const getApiKeyTemplateApi = (id) =>
+  request({ url: `/admin/api-key-templates/${id}`, method: 'GET' })
+export const createApiKeyTemplateApi = (data) =>
+  request({ url: '/admin/api-key-templates', method: 'POST', data })
+export const updateApiKeyTemplateApi = (id, data) =>
+  request({ url: `/admin/api-key-templates/${id}`, method: 'PUT', data })
+export const deleteApiKeyTemplateApi = (id) =>
+  request({ url: `/admin/api-key-templates/${id}`, method: 'DELETE' })
+export const createKeyFromTemplateApi = (templateId, data) =>
+  request({ url: `/admin/api-key-templates/${templateId}/create-key`, method: 'POST', data })
+
 export const getApiKeyStatsApi = (id, params) =>
   request({ url: `/admin/api-keys/${id}/stats`, method: 'GET', params })
 export const getApiKeyModelStatsApi = (id, params) =>

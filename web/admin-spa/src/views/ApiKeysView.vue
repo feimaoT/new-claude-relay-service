@@ -48,6 +48,13 @@
                 {{ deletedApiKeys.length }}
               </span>
             </button>
+            <button
+              class="whitespace-nowrap border-b-2 border-transparent px-1 py-2 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:text-gray-300"
+              @click="goToTemplates"
+            >
+              <i class="fas fa-file-invoice mr-1"></i>
+              Keys 模板
+            </button>
           </nav>
         </div>
 
@@ -4293,6 +4300,11 @@ const openTimeline = (keyId) => {
   if (!id) return
   showUsageDetailModal.value = false
   router.push(`/api-keys/${id}/usage-records`)
+}
+
+// 跳转到模板管理页面
+const goToTemplates = () => {
+  router.push('/api-key-templates')
 }
 
 // 格式化时间（秒转换为可读格式） - 已移到 WindowLimitBar 组件中

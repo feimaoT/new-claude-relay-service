@@ -801,6 +801,54 @@ class RedisClient {
       }
     }
 
+    // keyValue 搜索模式：直接验证key，忽略其他筛选条件
+    if (search && searchMode === 'keyValue') {
+      const trimmedSearch = search.trim()
+      const apiKeyService = require('../services/apiKeyService')
+      logger.info(`🔍 Searching for key value: ${trimmedSearch.substring(0, 10)}...`)
+
+      try {
+        // 验证输入的key是否存在
+        const verifiedKey = await apiKeyService.verifyApiKey(trimmedSearch)
+
+        logger.info(
+          `🔍 Key verification result: ${verifiedKey ? `found (${verifiedKey.id})` : 'not found'}`
+        )
+
+        if (verifiedKey && verifiedKey.id) {
+          // 找到匹配的key，直接获取完整信息
+          const keyData = await this.get(`api_key:${verifiedKey.id}`)
+          logger.info(`✅ Found matching key: ${verifiedKey.id}`)
+
+          // 返回单个key的结果
+          const items = keyData && !keyData.isDeleted ? [keyData] : []
+          return {
+            items,
+            pagination: {
+              page: 1,
+              pageSize,
+              total: items.length,
+              totalPages: items.length > 0 ? 1 : 0
+            }
+          }
+        } else {
+          // 没找到匹配的key，返回空
+          logger.warn('⚠️ No matching key found')
+          return {
+            items: [],
+            pagination: { page: 1, pageSize, total: 0, totalPages: 0 }
+          }
+        }
+      } catch (err) {
+        // 验证失败，返回空
+        logger.error('❌ Key value search error:', err)
+        return {
+          items: [],
+          pagination: { page: 1, pageSize, total: 0, totalPages: 0 }
+        }
+      }
+    }
+
     // 降级：使用 SCAN 获取所有 apikey:* 的 ID 列表（避免阻塞）
     const keyIds = await this.scanApiKeyIds()
 
@@ -829,9 +877,11 @@ class RedisClient {
       })
     }
 
-    // 搜索
-    if (search) {
-      const lowerSearch = search.toLowerCase().trim()
+    // 搜索（非 keyValue 模式）
+    if (search && searchMode !== 'keyValue') {
+      const trimmedSearch = search.trim()
+      const lowerSearch = trimmedSearch.toLowerCase()
+
       if (searchMode === 'apiKey') {
         // apiKey 模式：搜索名称和拥有者
         filteredKeys = filteredKeys.filter(
@@ -839,24 +889,6 @@ class RedisClient {
             (k.name && k.name.toLowerCase().includes(lowerSearch)) ||
             (k.ownerDisplayName && k.ownerDisplayName.toLowerCase().includes(lowerSearch))
         )
-      } else if (searchMode === 'keyValue') {
-        // keyValue 模式：按完整key值搜索（验证哈希）
-        const apiKeyService = require('../services/apiKeyService')
-        try {
-          // 验证输入的key是否存在
-          const verifiedKey = await apiKeyService.verifyApiKey(search)
-          if (verifiedKey && verifiedKey.id) {
-            // 找到匹配的key，只返回这一个
-            filteredKeys = filteredKeys.filter((k) => k.id === verifiedKey.id)
-          } else {
-            // 没找到匹配的key，返回空
-            filteredKeys = []
-          }
-        } catch (err) {
-          // 验证失败，返回空
-          logger.warn('⚠️ Key value search failed:', err.message)
-          filteredKeys = []
-        }
       } else if (searchMode === 'bindingAccount') {
         // bindingAccount 模式：直接在Redis层处理，避免路由层加载10000条
         const accountNameCacheService = require('../services/accountNameCacheService')
