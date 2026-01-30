@@ -26,10 +26,9 @@
 
 <div align="center">
 
-| 平台 | 类型 | 服务 | 介绍 |
-|:---|:---|:---|:---|
-| **[pincc.ai](https://pincc.ai/)** | 🏆 **官方运营** | <small>✅ Claude Code<br>✅ Codex CLI</small> | 项目直营，提供稳定的 Claude Code / Codex CLI 拼车服务 |
-| **[ctok.ai](https://ctok.ai/)** | 🤝 合作伙伴 | <small>✅ Claude Code<br>✅ Codex CLI</small> | 社区认证，提供 Claude Code / Codex CLI 拼车 |
+| 平台 | 服务 | 介绍 |
+|:---|:---|:---|
+| **[pincc.ai](https://pincc.ai/)** | <small>✅ Claude Code<br>✅ Codex CLI</small> | 提供稳定的 Codex CLI 拼车服务<br><br> **全新上线 2API 渠道**：接入CC的效果媲美官方 Anthropic Console 账号，暂不支持 Websearch 和 PDF 识别功能（Websearch 后期会支持）<br>💰 单价：0.8元=1美金额度 |
 
 
 </div>
@@ -394,11 +393,32 @@ docker-compose.yml 已包含：
 
 **Claude Code 设置环境变量：**
 
+
+**使用标准 Claude 账号池**
+
 默认使用标准 Claude 账号池：
 
 ```bash
 export ANTHROPIC_BASE_URL="http://127.0.0.1:3000/api/" # 根据实际填写你服务器的ip地址或者域名
 export ANTHROPIC_AUTH_TOKEN="后台创建的API密钥"
+```
+
+**使用 Antigravity 账户池**
+
+适用于通过 Antigravity 渠道使用 Claude 模型（如 `claude-opus-4-5` 等）。
+
+```bash
+# 1. 设置 Base URL 为 Antigravity 专用路径
+export ANTHROPIC_BASE_URL="http://127.0.0.1:3000/antigravity/api/"
+
+# 2. 设置 API Key（在后台创建，权限需包含 'all' 或 'gemini'）
+export ANTHROPIC_AUTH_TOKEN="后台创建的API密钥"
+
+# 3. 指定模型名称（直接使用短名，无需前缀！）
+export ANTHROPIC_MODEL="claude-opus-4-5"
+
+# 4. 启动
+claude
 ```
 
 **VSCode Claude 插件配置：**
@@ -604,8 +624,9 @@ gpt-5                      # Codex使用固定模型ID
 - 所有账号类型都使用相同的API密钥（在后台统一创建）
 - 根据不同的路由前缀自动识别账号类型
 - `/claude/` - 使用Claude账号池
+- `/antigravity/api/` - 使用Antigravity账号池（推荐用于Claude Code）
 - `/droid/claude/` - 使用Droid类型Claude账号池（只建议api调用或Droid Cli中使用）
-- `/gemini/` - 使用Gemini账号池  
+- `/gemini/` - 使用Gemini账号池
 - `/openai/` - 使用Codex账号（只支持Openai-Response格式）
 - `/droid/openai/` - 使用Droid类型OpenAI兼容账号池（只建议api调用或Droid Cli中使用）
 - 支持所有标准API端点（messages、models等）

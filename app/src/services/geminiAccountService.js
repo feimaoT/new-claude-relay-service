@@ -2,7 +2,6 @@ const redisClient = require('../models/redis')
 const { v4: uuidv4 } = require('uuid')
 const crypto = require('crypto')
 const https = require('https')
-const config = require('../../config/config')
 const logger = require('../utils/logger')
 const { OAuth2Client } = require('google-auth-library')
 const { maskToken } = require('../utils/tokenMask')
@@ -15,12 +14,68 @@ const {
   logRefreshSkipped
 } = require('../utils/tokenRefreshLogger')
 const tokenRefreshService = require('./tokenRefreshService')
-const LRUCache = require('../utils/lruCache')
+const { createEncryptor } = require('../utils/commonHelper')
+const antigravityClient = require('./antigravityClient')
 
-// Gemini CLI OAuth 配置 - 这些是公开的 Gemini CLI 凭据
-const OAUTH_CLIENT_ID = '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com'
-const OAUTH_CLIENT_SECRET = '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'
-const OAUTH_SCOPES = ['https://www.googleapis.com/auth/cloud-platform']
+// Gemini 账户键前缀
+const GEMINI_ACCOUNT_KEY_PREFIX = 'gemini_account:'
+const SHARED_GEMINI_ACCOUNTS_KEY = 'shared_gemini_accounts'
+const ACCOUNT_SESSION_MAPPING_PREFIX = 'gemini_session_account_mapping:'
+
+// Gemini OAuth 配置 - 支持 Gemini CLI 与 Antigravity 两种 OAuth 应用
+const OAUTH_PROVIDER_GEMINI_CLI = 'gemini-cli'
+const OAUTH_PROVIDER_ANTIGRAVITY = 'antigravity'
+
+const OAUTH_PROVIDERS = {
+  [OAUTH_PROVIDER_GEMINI_CLI]: {
+    // Gemini CLI OAuth 配置（公开）
+    clientId:
+      process.env.GEMINI_OAUTH_CLIENT_ID ||
+      '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com',
+    clientSecret: process.env.GEMINI_OAUTH_CLIENT_SECRET || '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',
+    scopes: ['https://www.googleapis.com/auth/cloud-platform']
+  },
+  [OAUTH_PROVIDER_ANTIGRAVITY]: {
+    // Antigravity OAuth 配置（参考 gcli2api）
+    clientId:
+      process.env.ANTIGRAVITY_OAUTH_CLIENT_ID ||
+      '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com',
+    clientSecret:
+      process.env.ANTIGRAVITY_OAUTH_CLIENT_SECRET || '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',
+    scopes: [
+      'https://www.googleapis.com/auth/cloud-platform',
+      'https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/userinfo.profile',
+      'https://www.googleapis.com/auth/cclog',
+      'https://www.googleapis.com/auth/experimentsandconfigs'
+    ]
+  }
+}
+
+if (!process.env.GEMINI_OAUTH_CLIENT_SECRET) {
+  logger.warn(
+    '⚠️ GEMINI_OAUTH_CLIENT_SECRET 未设置，使用内置默认值（建议在生产环境通过环境变量覆盖）'
+  )
+}
+if (!process.env.ANTIGRAVITY_OAUTH_CLIENT_SECRET) {
+  logger.warn(
+    '⚠️ ANTIGRAVITY_OAUTH_CLIENT_SECRET 未设置，使用内置默认值（建议在生产环境通过环境变量覆盖）'
+  )
+}
+
+function normalizeOauthProvider(oauthProvider) {
+  if (!oauthProvider) {
+    return OAUTH_PROVIDER_GEMINI_CLI
+  }
+  return oauthProvider === OAUTH_PROVIDER_ANTIGRAVITY
+    ? OAUTH_PROVIDER_ANTIGRAVITY
+    : OAUTH_PROVIDER_GEMINI_CLI
+}
+
+function getOauthProviderConfig(oauthProvider) {
+  const normalized = normalizeOauthProvider(oauthProvider)
+  return OAUTH_PROVIDERS[normalized] || OAUTH_PROVIDERS[OAUTH_PROVIDER_GEMINI_CLI]
+}
 
 // 🌐 TCP Keep-Alive Agent 配置
 // 解决长时间流式请求中 NAT/防火墙空闲超时导致的连接中断问题
@@ -34,104 +89,140 @@ const keepAliveAgent = new https.Agent({
 
 logger.info('🌐 Gemini HTTPS Agent initialized with TCP Keep-Alive support')
 
-// 加密相关常量
-const ALGORITHM = 'aes-256-cbc'
-const ENCRYPTION_SALT = 'gemini-account-salt'
-const IV_LENGTH = 16
+// 使用 commonHelper 的加密器
+const encryptor = createEncryptor('gemini-account-salt')
+const { encrypt, decrypt } = encryptor
 
-// 🚀 性能优化：缓存派生的加密密钥，避免每次重复计算
-// scryptSync 是 CPU 密集型操作，缓存可以减少 95%+ 的 CPU 占用
-let _encryptionKeyCache = null
-
-// 🔄 解密结果缓存，提高解密性能
-const decryptCache = new LRUCache(500)
-
-// 生成加密密钥（使用与 claudeAccountService 相同的方法）
-function generateEncryptionKey() {
-  if (!_encryptionKeyCache) {
-    _encryptionKeyCache = crypto.scryptSync(config.security.encryptionKey, ENCRYPTION_SALT, 32)
-    logger.info('🔑 Gemini encryption key derived and cached for performance optimization')
-  }
-  return _encryptionKeyCache
-}
-
-// Gemini 账户键前缀
-const GEMINI_ACCOUNT_KEY_PREFIX = 'gemini_account:'
-const SHARED_GEMINI_ACCOUNTS_KEY = 'shared_gemini_accounts'
-const ACCOUNT_SESSION_MAPPING_PREFIX = 'gemini_session_account_mapping:'
-
-// 加密函数
-function encrypt(text) {
-  if (!text) {
-    return ''
-  }
-  const key = generateEncryptionKey()
-  const iv = crypto.randomBytes(IV_LENGTH)
-  const cipher = crypto.createCipheriv(ALGORITHM, key, iv)
-  let encrypted = cipher.update(text)
-  encrypted = Buffer.concat([encrypted, cipher.final()])
-  return `${iv.toString('hex')}:${encrypted.toString('hex')}`
-}
-
-// 解密函数
-function decrypt(text) {
-  if (!text) {
-    return ''
-  }
-
-  // 🎯 检查缓存
-  const cacheKey = crypto.createHash('sha256').update(text).digest('hex')
-  const cached = decryptCache.get(cacheKey)
-  if (cached !== undefined) {
-    return cached
-  }
-
+async function fetchAvailableModelsAntigravity(
+  accessToken,
+  proxyConfig = null,
+  refreshToken = null
+) {
   try {
-    const key = generateEncryptionKey()
-    // IV 是固定长度的 32 个十六进制字符（16 字节）
-    const ivHex = text.substring(0, 32)
-    const encryptedHex = text.substring(33) // 跳过冒号
-
-    const iv = Buffer.from(ivHex, 'hex')
-    const encryptedText = Buffer.from(encryptedHex, 'hex')
-    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv)
-    let decrypted = decipher.update(encryptedText)
-    decrypted = Buffer.concat([decrypted, decipher.final()])
-    const result = decrypted.toString()
-
-    // 💾 存入缓存（5分钟过期）
-    decryptCache.set(cacheKey, result, 5 * 60 * 1000)
-
-    // 📊 定期打印缓存统计
-    if ((decryptCache.hits + decryptCache.misses) % 1000 === 0) {
-      decryptCache.printStats()
+    let effectiveToken = accessToken
+    if (refreshToken) {
+      try {
+        const client = await getOauthClient(
+          accessToken,
+          refreshToken,
+          proxyConfig,
+          OAUTH_PROVIDER_ANTIGRAVITY
+        )
+        if (client && client.getAccessToken) {
+          const latest = await client.getAccessToken()
+          if (latest?.token) {
+            effectiveToken = latest.token
+          }
+        }
+      } catch (error) {
+        logger.warn('Failed to refresh Antigravity access token for models list:', {
+          message: error.message
+        })
+      }
     }
 
-    return result
+    const data = await antigravityClient.fetchAvailableModels({
+      accessToken: effectiveToken,
+      proxyConfig
+    })
+    const modelsDict = data?.models
+    const created = Math.floor(Date.now() / 1000)
+
+    const models = []
+    const seen = new Set()
+    const {
+      getAntigravityModelAlias,
+      getAntigravityModelMetadata,
+      normalizeAntigravityModelInput
+    } = require('../utils/antigravityModel')
+
+    const pushModel = (modelId) => {
+      if (!modelId || seen.has(modelId)) {
+        return
+      }
+      seen.add(modelId)
+      const metadata = getAntigravityModelMetadata(modelId)
+      const entry = {
+        id: modelId,
+        object: 'model',
+        created,
+        owned_by: 'antigravity'
+      }
+      if (metadata?.name) {
+        entry.name = metadata.name
+      }
+      if (metadata?.maxCompletionTokens) {
+        entry.max_completion_tokens = metadata.maxCompletionTokens
+      }
+      if (metadata?.thinking) {
+        entry.thinking = metadata.thinking
+      }
+      models.push(entry)
+    }
+
+    if (modelsDict && typeof modelsDict === 'object') {
+      for (const modelId of Object.keys(modelsDict)) {
+        const normalized = normalizeAntigravityModelInput(modelId)
+        const alias = getAntigravityModelAlias(normalized)
+        if (!alias) {
+          continue
+        }
+        pushModel(alias)
+
+        if (alias.endsWith('-thinking')) {
+          pushModel(alias.replace(/-thinking$/, ''))
+        }
+
+        if (alias.startsWith('gemini-claude-')) {
+          pushModel(alias.replace(/^gemini-/, ''))
+        }
+      }
+    }
+
+    return models
   } catch (error) {
-    logger.error('Decryption error:', error)
-    return ''
+    logger.error('Failed to fetch Antigravity models:', error.response?.data || error.message)
+    return [
+      {
+        id: 'gemini-2.5-flash',
+        object: 'model',
+        created: Math.floor(Date.now() / 1000),
+        owned_by: 'antigravity'
+      }
+    ]
   }
+}
+
+async function countTokensAntigravity(client, contents, model, proxyConfig = null) {
+  const { token } = await client.getAccessToken()
+  const response = await antigravityClient.countTokens({
+    accessToken: token,
+    proxyConfig,
+    contents,
+    model
+  })
+  return response
 }
 
 // 🧹 定期清理缓存（每10分钟）
 setInterval(
   () => {
-    decryptCache.cleanup()
-    logger.info('🧹 Gemini decrypt cache cleanup completed', decryptCache.getStats())
+    encryptor.clearCache()
+    logger.info('🧹 Gemini decrypt cache cleanup completed', encryptor.getStats())
   },
   10 * 60 * 1000
 )
 
 // 创建 OAuth2 客户端（支持代理配置）
-function createOAuth2Client(redirectUri = null, proxyConfig = null) {
+function createOAuth2Client(redirectUri = null, proxyConfig = null, oauthProvider = null) {
   // 如果没有提供 redirectUri，使用默认值
   const uri = redirectUri || 'http://localhost:45462'
+  const oauthConfig = getOauthProviderConfig(oauthProvider)
 
   // 准备客户端选项
   const clientOptions = {
-    clientId: OAUTH_CLIENT_ID,
-    clientSecret: OAUTH_CLIENT_SECRET,
+    clientId: oauthConfig.clientId,
+    clientSecret: oauthConfig.clientSecret,
     redirectUri: uri
   }
 
@@ -152,10 +243,17 @@ function createOAuth2Client(redirectUri = null, proxyConfig = null) {
 }
 
 // 生成授权 URL (支持 PKCE 和代理)
-async function generateAuthUrl(state = null, redirectUri = null, proxyConfig = null) {
+async function generateAuthUrl(
+  state = null,
+  redirectUri = null,
+  proxyConfig = null,
+  oauthProvider = null
+) {
   // 使用新的 redirect URI
   const finalRedirectUri = redirectUri || 'https://codeassist.google.com/authcode'
-  const oAuth2Client = createOAuth2Client(finalRedirectUri, proxyConfig)
+  const normalizedProvider = normalizeOauthProvider(oauthProvider)
+  const oauthConfig = getOauthProviderConfig(normalizedProvider)
+  const oAuth2Client = createOAuth2Client(finalRedirectUri, proxyConfig, normalizedProvider)
 
   if (proxyConfig) {
     logger.info(
@@ -172,7 +270,7 @@ async function generateAuthUrl(state = null, redirectUri = null, proxyConfig = n
   const authUrl = oAuth2Client.generateAuthUrl({
     redirect_uri: finalRedirectUri,
     access_type: 'offline',
-    scope: OAUTH_SCOPES,
+    scope: oauthConfig.scopes,
     code_challenge_method: 'S256',
     code_challenge: codeVerifier.codeChallenge,
     state: stateValue,
@@ -183,7 +281,8 @@ async function generateAuthUrl(state = null, redirectUri = null, proxyConfig = n
     authUrl,
     state: stateValue,
     codeVerifier: codeVerifier.codeVerifier,
-    redirectUri: finalRedirectUri
+    redirectUri: finalRedirectUri,
+    oauthProvider: normalizedProvider
   }
 }
 
@@ -244,11 +343,14 @@ async function exchangeCodeForTokens(
   code,
   redirectUri = null,
   codeVerifier = null,
-  proxyConfig = null
+  proxyConfig = null,
+  oauthProvider = null
 ) {
   try {
+    const normalizedProvider = normalizeOauthProvider(oauthProvider)
+    const oauthConfig = getOauthProviderConfig(normalizedProvider)
     // 创建带代理配置的 OAuth2Client
-    const oAuth2Client = createOAuth2Client(redirectUri, proxyConfig)
+    const oAuth2Client = createOAuth2Client(redirectUri, proxyConfig, normalizedProvider)
 
     if (proxyConfig) {
       logger.info(
@@ -274,7 +376,7 @@ async function exchangeCodeForTokens(
     return {
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
-      scope: tokens.scope || OAUTH_SCOPES.join(' '),
+      scope: tokens.scope || oauthConfig.scopes.join(' '),
       token_type: tokens.token_type || 'Bearer',
       expiry_date: tokens.expiry_date || Date.now() + tokens.expires_in * 1000
     }
@@ -285,9 +387,11 @@ async function exchangeCodeForTokens(
 }
 
 // 刷新访问令牌
-async function refreshAccessToken(refreshToken, proxyConfig = null) {
+async function refreshAccessToken(refreshToken, proxyConfig = null, oauthProvider = null) {
+  const normalizedProvider = normalizeOauthProvider(oauthProvider)
+  const oauthConfig = getOauthProviderConfig(normalizedProvider)
   // 创建带代理配置的 OAuth2Client
-  const oAuth2Client = createOAuth2Client(null, proxyConfig)
+  const oAuth2Client = createOAuth2Client(null, proxyConfig, normalizedProvider)
 
   try {
     // 设置 refresh_token
@@ -319,7 +423,7 @@ async function refreshAccessToken(refreshToken, proxyConfig = null) {
     return {
       access_token: credentials.access_token,
       refresh_token: credentials.refresh_token || refreshToken, // 保留原 refresh_token 如果没有返回新的
-      scope: credentials.scope || OAUTH_SCOPES.join(' '),
+      scope: credentials.scope || oauthConfig.scopes.join(' '),
       token_type: credentials.token_type || 'Bearer',
       expiry_date: credentials.expiry_date || Date.now() + 3600000 // 默认1小时过期
     }
@@ -339,6 +443,8 @@ async function refreshAccessToken(refreshToken, proxyConfig = null) {
 async function createAccount(accountData) {
   const id = uuidv4()
   const now = new Date().toISOString()
+  const oauthProvider = normalizeOauthProvider(accountData.oauthProvider)
+  const oauthConfig = getOauthProviderConfig(oauthProvider)
 
   // 处理凭证数据
   let geminiOauth = null
@@ -371,7 +477,7 @@ async function createAccount(accountData) {
       geminiOauth = JSON.stringify({
         access_token: accessToken,
         refresh_token: refreshToken,
-        scope: accountData.scope || OAUTH_SCOPES.join(' '),
+        scope: accountData.scope || oauthConfig.scopes.join(' '),
         token_type: accountData.tokenType || 'Bearer',
         expiry_date: accountData.expiryDate || Date.now() + 3600000 // 默认1小时
       })
@@ -399,7 +505,8 @@ async function createAccount(accountData) {
     refreshToken: refreshToken ? encrypt(refreshToken) : '',
     expiresAt, // OAuth Token 过期时间（技术字段，自动刷新）
     // 只有OAuth方式才有scopes，手动添加的没有
-    scopes: accountData.geminiOauth ? accountData.scopes || OAUTH_SCOPES.join(' ') : '',
+    scopes: accountData.geminiOauth ? accountData.scopes || oauthConfig.scopes.join(' ') : '',
+    oauthProvider,
 
     // ✅ 新增：账户订阅到期时间（业务字段，手动管理）
     subscriptionExpiresAt: accountData.subscriptionExpiresAt || null,
@@ -426,6 +533,7 @@ async function createAccount(accountData) {
   // 保存到 Redis
   const client = redisClient.getClientSafe()
   await client.hset(`${GEMINI_ACCOUNT_KEY_PREFIX}${id}`, account)
+  await redisClient.addToIndex('gemini_account:index', id)
 
   // 如果是共享账户，添加到共享账户集合
   if (account.accountType === 'shared') {
@@ -506,6 +614,10 @@ async function updateAccount(accountId, updates) {
   // 处理 schedulable 字段，确保正确转换为字符串存储
   if (updates.schedulable !== undefined) {
     updates.schedulable = updates.schedulable.toString()
+  }
+
+  if (updates.oauthProvider !== undefined) {
+    updates.oauthProvider = normalizeOauthProvider(updates.oauthProvider)
   }
 
   // 加密敏感字段
@@ -623,19 +735,20 @@ async function deleteAccount(accountId) {
   // 从 Redis 删除
   const client = redisClient.getClientSafe()
   await client.del(`${GEMINI_ACCOUNT_KEY_PREFIX}${accountId}`)
+  await redisClient.removeFromIndex('gemini_account:index', accountId)
 
   // 从共享账户集合中移除
   if (account.accountType === 'shared') {
     await client.srem(SHARED_GEMINI_ACCOUNTS_KEY, accountId)
   }
 
-  // 清理会话映射
-  const sessionMappings = await client.keys(`${ACCOUNT_SESSION_MAPPING_PREFIX}*`)
-  for (const key of sessionMappings) {
-    const mappedAccountId = await client.get(key)
-    if (mappedAccountId === accountId) {
-      await client.del(key)
-    }
+  // 清理会话映射（使用反向索引）
+  const sessionHashes = await client.smembers(`gemini_account_sessions:${accountId}`)
+  if (sessionHashes.length > 0) {
+    const pipeline = client.pipeline()
+    sessionHashes.forEach((hash) => pipeline.del(`${ACCOUNT_SESSION_MAPPING_PREFIX}${hash}`))
+    pipeline.del(`gemini_account_sessions:${accountId}`)
+    await pipeline.exec()
   }
 
   logger.info(`Deleted Gemini account: ${accountId}`)
@@ -644,12 +757,18 @@ async function deleteAccount(accountId) {
 
 // 获取所有账户
 async function getAllAccounts() {
-  const client = redisClient.getClientSafe()
-  const keys = await client.keys(`${GEMINI_ACCOUNT_KEY_PREFIX}*`)
+  const _client = redisClient.getClientSafe()
+  const accountIds = await redisClient.getAllIdsByIndex(
+    'gemini_account:index',
+    `${GEMINI_ACCOUNT_KEY_PREFIX}*`,
+    /^gemini_account:(.+)$/
+  )
+  const keys = accountIds.map((id) => `${GEMINI_ACCOUNT_KEY_PREFIX}${id}`)
   const accounts = []
+  const dataList = await redisClient.batchHgetallChunked(keys)
 
-  for (const key of keys) {
-    const accountData = await client.hgetall(key)
+  for (let i = 0; i < keys.length; i++) {
+    const accountData = dataList[i]
     if (accountData && Object.keys(accountData).length > 0) {
       // 获取限流状态信息
       const rateLimitInfo = await getAccountRateLimitInfo(accountData.id)
@@ -752,6 +871,8 @@ async function selectAvailableAccount(apiKeyId, sessionHash = null) {
           3600, // 1小时过期
           account.id
         )
+        await client.sadd(`gemini_account_sessions:${account.id}`, sessionHash)
+        await client.expire(`gemini_account_sessions:${account.id}`, 3600)
       }
 
       return account
@@ -811,6 +932,8 @@ async function selectAvailableAccount(apiKeyId, sessionHash = null) {
   // 创建粘性会话映射
   if (sessionHash) {
     await client.setex(`${ACCOUNT_SESSION_MAPPING_PREFIX}${sessionHash}`, 3600, selectedAccount.id)
+    await client.sadd(`gemini_account_sessions:${selectedAccount.id}`, sessionHash)
+    await client.expire(`gemini_account_sessions:${selectedAccount.id}`, 3600)
   }
 
   return selectedAccount
@@ -885,12 +1008,13 @@ async function refreshAccountToken(accountId) {
       // 重新获取账户数据（可能已被其他进程刷新）
       const updatedAccount = await getAccount(accountId)
       if (updatedAccount && updatedAccount.accessToken) {
+        const oauthConfig = getOauthProviderConfig(updatedAccount.oauthProvider)
         const accessToken = decrypt(updatedAccount.accessToken)
         return {
           access_token: accessToken,
           refresh_token: updatedAccount.refreshToken ? decrypt(updatedAccount.refreshToken) : '',
           expiry_date: updatedAccount.expiresAt ? new Date(updatedAccount.expiresAt).getTime() : 0,
-          scope: updatedAccount.scope || OAUTH_SCOPES.join(' '),
+          scope: updatedAccount.scopes || oauthConfig.scopes.join(' '),
           token_type: 'Bearer'
         }
       }
@@ -904,7 +1028,11 @@ async function refreshAccountToken(accountId) {
 
     // account.refreshToken 已经是解密后的值（从 getAccount 返回）
     // 传入账户的代理配置
-    const newTokens = await refreshAccessToken(account.refreshToken, account.proxy)
+    const newTokens = await refreshAccessToken(
+      account.refreshToken,
+      account.proxy,
+      account.oauthProvider
+    )
 
     // 更新账户信息
     const updates = {
@@ -1036,14 +1164,15 @@ async function getAccountRateLimitInfo(accountId) {
 }
 
 // 获取配置的OAuth客户端 - 参考GeminiCliSimulator的getOauthClient方法（支持代理）
-async function getOauthClient(accessToken, refreshToken, proxyConfig = null) {
-  const client = createOAuth2Client(null, proxyConfig)
+async function getOauthClient(accessToken, refreshToken, proxyConfig = null, oauthProvider = null) {
+  const normalizedProvider = normalizeOauthProvider(oauthProvider)
+  const oauthConfig = getOauthProviderConfig(normalizedProvider)
+  const client = createOAuth2Client(null, proxyConfig, normalizedProvider)
 
   const creds = {
     access_token: accessToken,
     refresh_token: refreshToken,
-    scope:
-      'https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.profile openid https://www.googleapis.com/auth/userinfo.email',
+    scope: oauthConfig.scopes.join(' '),
     token_type: 'Bearer',
     expiry_date: 1754269905646
   }
@@ -1509,6 +1638,43 @@ async function generateContent(
   return response.data
 }
 
+// 调用 Antigravity 上游生成内容（非流式）
+async function generateContentAntigravity(
+  client,
+  requestData,
+  userPromptId,
+  projectId = null,
+  sessionId = null,
+  proxyConfig = null
+) {
+  const { token } = await client.getAccessToken()
+  const { model } = antigravityClient.buildAntigravityEnvelope({
+    requestData,
+    projectId,
+    sessionId,
+    userPromptId
+  })
+
+  logger.info('🪐 Antigravity generateContent API调用开始', {
+    model,
+    userPromptId,
+    projectId,
+    sessionId
+  })
+
+  const { response } = await antigravityClient.request({
+    accessToken: token,
+    proxyConfig,
+    requestData,
+    projectId,
+    sessionId,
+    userPromptId,
+    stream: false
+  })
+  logger.info('✅ Antigravity generateContent API调用成功')
+  return response.data
+}
+
 // 调用 Code Assist API 生成内容（流式）
 async function generateContentStream(
   client,
@@ -1591,6 +1757,46 @@ async function generateContentStream(
 
   logger.info('✅ streamGenerateContent API调用成功，开始流式传输')
   return response.data // 返回流对象
+}
+
+// 调用 Antigravity 上游生成内容（流式）
+async function generateContentStreamAntigravity(
+  client,
+  requestData,
+  userPromptId,
+  projectId = null,
+  sessionId = null,
+  signal = null,
+  proxyConfig = null
+) {
+  const { token } = await client.getAccessToken()
+  const { model } = antigravityClient.buildAntigravityEnvelope({
+    requestData,
+    projectId,
+    sessionId,
+    userPromptId
+  })
+
+  logger.info('🌊 Antigravity streamGenerateContent API调用开始', {
+    model,
+    userPromptId,
+    projectId,
+    sessionId
+  })
+
+  const { response } = await antigravityClient.request({
+    accessToken: token,
+    proxyConfig,
+    requestData,
+    projectId,
+    sessionId,
+    userPromptId,
+    stream: true,
+    signal,
+    params: { alt: 'sse' }
+  })
+  logger.info('✅ Antigravity streamGenerateContent API调用成功，开始流式传输')
+  return response.data
 }
 
 // 更新账户的临时项目 ID
@@ -1684,13 +1890,14 @@ module.exports = {
   setupUser,
   encrypt,
   decrypt,
-  generateEncryptionKey,
-  decryptCache, // 暴露缓存对象以便测试和监控
+  encryptor, // 暴露加密器以便测试和监控
   countTokens,
+  countTokensAntigravity,
   generateContent,
   generateContentStream,
+  generateContentAntigravity,
+  generateContentStreamAntigravity,
+  fetchAvailableModelsAntigravity,
   updateTempProjectId,
-  resetAccountStatus,
-  OAUTH_CLIENT_ID,
-  OAUTH_SCOPES
+  resetAccountStatus
 }
