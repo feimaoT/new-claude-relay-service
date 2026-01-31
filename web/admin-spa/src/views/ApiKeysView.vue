@@ -48,13 +48,6 @@
                 {{ deletedApiKeys.length }}
               </span>
             </button>
-            <button
-              class="whitespace-nowrap border-b-2 border-transparent px-1 py-2 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:text-gray-300"
-              @click="goToTemplates"
-            >
-              <i class="fas fa-file-invoice mr-1"></i>
-              Keys 模板
-            </button>
           </nav>
         </div>
 
@@ -242,6 +235,18 @@
                 <span class="relative">管理标签</span>
               </button>
 
+              <!-- Keys 模板按钮 -->
+              <button
+                class="group relative flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-all duration-200 hover:border-gray-300 hover:shadow-md dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-gray-500 sm:w-auto"
+                @click="goToTemplates"
+              >
+                <div
+                  class="absolute -inset-0.5 rounded-lg bg-gradient-to-r from-indigo-500 to-blue-500 opacity-0 blur transition duration-300 group-hover:opacity-20"
+                ></div>
+                <i class="fas fa-file-invoice relative text-indigo-500" />
+                <span class="relative">Keys 模板</span>
+              </button>
+
               <!-- 批量编辑按钮 - 移到刷新按钮旁边 -->
               <button
                 v-if="selectedApiKeys.length > 0"
@@ -331,6 +336,11 @@
                         ]"
                       />
                       <i v-else class="fas fa-sort ml-1 text-gray-400" />
+                    </th>
+                    <th
+                      class="min-w-[160px] px-3 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300"
+                    >
+                      Key 值
                     </th>
                     <th
                       class="min-w-[140px] px-3 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300"
@@ -490,6 +500,48 @@
                             <i class="fas fa-user mr-1" />
                             {{ key.ownerDisplayName }}
                           </div>
+                        </div>
+                      </td>
+                      <!-- Key 值列 -->
+                      <td class="px-3 py-3">
+                        <div class="flex items-center gap-2">
+                          <span
+                            v-if="isKeyValueVisible(key.id) && !isHashValue(key.apiKey)"
+                            class="cursor-pointer font-mono text-sm text-gray-700 dark:text-gray-300"
+                            title="点击复制"
+                            @click.stop="copyText(key.apiKey)"
+                          >
+                            {{ key.apiKey }}
+                          </span>
+                          <span
+                            v-else-if="isKeyValueVisible(key.id) && isHashValue(key.apiKey)"
+                            class="font-mono text-xs italic text-gray-400 dark:text-gray-500"
+                          >
+                            （旧数据，无法显示）
+                          </span>
+                          <span v-else class="font-mono text-sm text-gray-400 dark:text-gray-500">
+                            ••••••••••••••••
+                          </span>
+                          <button
+                            v-if="!isHashValue(key.apiKey)"
+                            class="flex h-6 w-6 items-center justify-center rounded text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                            :title="isKeyValueVisible(key.id) ? '隐藏' : '显示'"
+                            @click.stop="toggleKeyValueVisibility(key.id)"
+                          >
+                            <i
+                              :class="[
+                                'fas text-xs',
+                                isKeyValueVisible(key.id) ? 'fa-eye-slash' : 'fa-eye'
+                              ]"
+                            />
+                          </button>
+                          <span
+                            v-else
+                            class="flex h-6 w-6 items-center justify-center text-gray-300 dark:text-gray-600"
+                            title="旧数据无法显示完整Key"
+                          >
+                            <i class="fas fa-lock text-xs" />
+                          </span>
                         </div>
                       </td>
                       <!-- 所属账号列 -->
@@ -1291,6 +1343,46 @@
                     >
                       {{ key.name }}
                     </h4>
+                    <!-- Key 值显示 -->
+                    <div class="mt-1 flex items-center gap-2">
+                      <span
+                        v-if="isKeyValueVisible(key.id) && !isHashValue(key.apiKey)"
+                        class="cursor-pointer font-mono text-xs text-gray-600 dark:text-gray-400"
+                        title="点击复制"
+                        @click.stop="copyText(key.apiKey)"
+                      >
+                        {{ key.apiKey }}
+                      </span>
+                      <span
+                        v-else-if="isKeyValueVisible(key.id) && isHashValue(key.apiKey)"
+                        class="font-mono text-[10px] italic text-gray-400 dark:text-gray-500"
+                      >
+                        （旧数据，无法显示）
+                      </span>
+                      <span v-else class="font-mono text-xs text-gray-400 dark:text-gray-500">
+                        ••••••••••••••••
+                      </span>
+                      <button
+                        v-if="!isHashValue(key.apiKey)"
+                        class="flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                        :title="isKeyValueVisible(key.id) ? '隐藏' : '显示'"
+                        @click.stop="toggleKeyValueVisibility(key.id)"
+                      >
+                        <i
+                          :class="[
+                            'fas text-[10px]',
+                            isKeyValueVisible(key.id) ? 'fa-eye-slash' : 'fa-eye'
+                          ]"
+                        />
+                      </button>
+                      <span
+                        v-else
+                        class="flex h-5 w-5 items-center justify-center text-gray-300"
+                        title="旧数据无法显示完整Key"
+                      >
+                        <i class="fas fa-lock text-[8px]" />
+                      </span>
+                    </div>
                     <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
                       {{ key.id }}
                     </p>
@@ -2184,6 +2276,8 @@ import ConfirmModal from '@/components/common/ConfirmModal.vue'
 const router = useRouter()
 const authStore = useAuthStore()
 const apiKeys = ref([])
+// Key值显示状态
+const keyValueVisibility = ref(new Map())
 
 // 获取 LDAP 启用状态
 const isLdapEnabled = computed(() => authStore.oemSettings?.ldapEnabled || false)
@@ -4441,10 +4535,28 @@ const isLastUsageDeleted = (apiKey) => {
   return isLikelyDeletedUsage(info)
 }
 
+// 检查是否是哈希值（64位十六进制）
+const isHashValue = (value) => {
+  if (!value) return true
+  // 如果是64位十六进制字符串，认为是哈希值
+  return /^[0-9a-f]{64}$/i.test(value)
+}
+
 // 清除搜索
 const clearSearch = () => {
   searchKeyword.value = ''
   currentPage.value = 1
+}
+
+// 切换Key值显示状态
+const toggleKeyValueVisibility = (keyId) => {
+  const currentState = keyValueVisibility.value.get(keyId) || false
+  keyValueVisibility.value.set(keyId, !currentState)
+}
+
+// 检查Key值是否可见
+const isKeyValueVisible = (keyId) => {
+  return keyValueVisibility.value.get(keyId) || false
 }
 
 // 导出数据到Excel

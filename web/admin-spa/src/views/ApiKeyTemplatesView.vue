@@ -2,6 +2,15 @@
   <div class="min-h-screen bg-gray-50 p-6 dark:bg-gray-900">
     <!-- Header -->
     <div class="mb-6">
+      <div class="mb-2 flex items-center gap-2">
+        <button
+          class="flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+          @click="$router.push('/api-keys')"
+        >
+          <i class="fas fa-arrow-left"></i>
+          <span>返回 API Keys</span>
+        </button>
+      </div>
       <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
         <i class="fas fa-file-invoice mr-2 text-blue-600"></i>
         API Key 模板管理
@@ -116,124 +125,13 @@
     </div>
 
     <!-- Create/Edit Template Modal -->
-    <div
+    <CreateTemplateModal
       v-if="showModal"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      @click.self="closeModal"
-    >
-      <div
-        class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white p-6 dark:bg-gray-800"
-      >
-        <h2 class="mb-4 text-xl font-bold text-gray-900 dark:text-white">
-          {{ editingTemplate ? '编辑模板' : '创建模板' }}
-        </h2>
-
-        <div class="space-y-4">
-          <!-- Template Name -->
-          <div>
-            <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-              模板名称 *
-            </label>
-            <input
-              v-model="formData.templateName"
-              class="w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-              placeholder="例如：标准模板"
-              type="text"
-            />
-          </div>
-
-          <!-- Description -->
-          <div>
-            <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-              描述
-            </label>
-            <textarea
-              v-model="formData.description"
-              class="w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-              placeholder="简要描述该模板的用途"
-              rows="2"
-            ></textarea>
-          </div>
-
-          <!-- Limits -->
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                每日限额
-              </label>
-              <input
-                v-model.number="formData.dailyLimit"
-                class="w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                placeholder="不限制"
-                type="number"
-              />
-            </div>
-            <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                并发限制
-              </label>
-              <input
-                v-model.number="formData.concurrentLimit"
-                class="w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                placeholder="不限制"
-                type="number"
-              />
-            </div>
-          </div>
-
-          <!-- Permissions -->
-          <div>
-            <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-              服务权限
-            </label>
-            <div class="flex flex-wrap gap-2">
-              <label
-                v-for="perm in availablePermissions"
-                :key="perm"
-                class="flex items-center gap-2"
-              >
-                <input
-                  v-model="formData.permissions"
-                  class="rounded"
-                  type="checkbox"
-                  :value="perm"
-                />
-                <span class="text-sm text-gray-700 dark:text-gray-300">{{ perm }}</span>
-              </label>
-            </div>
-          </div>
-
-          <!-- Tags -->
-          <div>
-            <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-              标签（逗号分隔）
-            </label>
-            <input
-              v-model="tagsInput"
-              class="w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-              placeholder="例如：standard, premium"
-              type="text"
-            />
-          </div>
-        </div>
-
-        <!-- Actions -->
-        <div class="mt-6 flex justify-end gap-3">
-          <button
-            class="rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-            @click="closeModal"
-          >
-            取消
-          </button>
-          <button
-            class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-            @click="saveTemplate"
-          >
-            {{ editingTemplate ? '更新' : '创建' }}
-          </button>
-        </div>
-      </div>
-    </div>
+      :accounts="accounts"
+      :template="editingTemplate"
+      @close="closeModal"
+      @success="handleTemplateSuccess"
+    />
 
     <!-- Create Key from Template Modal -->
     <div
@@ -278,47 +176,157 @@
         </div>
       </div>
     </div>
+
+    <!-- New API Key Modal -->
+    <NewApiKeyModal
+      v-if="showNewApiKeyModal"
+      :api-key="newApiKeyData"
+      @close="showNewApiKeyModal = false"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { showToast } from '@/utils/tools'
 import * as httpApis from '@/utils/http_apis'
-
-const router = useRouter()
+import CreateTemplateModal from '@/components/apikeys/CreateTemplateModal.vue'
+import NewApiKeyModal from '@/components/apikeys/NewApiKeyModal.vue'
 
 // State
 const templates = ref([])
 const loading = ref(false)
 const showModal = ref(false)
 const showCreateKeyModal = ref(false)
+const showNewApiKeyModal = ref(false)
 const editingTemplate = ref(null)
 const selectedTemplate = ref(null)
 const newKeyName = ref('')
-const tagsInput = ref('')
+const newApiKeyData = ref(null)
 
-const availablePermissions = ['claude', 'gemini', 'openai', 'droid']
-
-const formData = ref({
-  templateName: '',
-  description: '',
-  dailyLimit: null,
-  concurrentLimit: null,
-  rateLimit: null,
-  permissions: [],
-  allowedClientTypes: [],
-  blockedModels: [],
-  quotaCardId: null,
-  bindingAccounts: [],
-  serviceRates: {},
-  tags: [],
-  expiresIn: null,
-  concurrentRequestQueueEnabled: false,
-  concurrentRequestQueueMaxSize: 3,
-  concurrentRequestQueueTimeoutMs: 10000
+// 账号数据
+const accounts = ref({
+  claude: [],
+  gemini: [],
+  openai: [],
+  bedrock: [],
+  droid: [],
+  claudeGroups: [],
+  geminiGroups: [],
+  openaiGroups: [],
+  droidGroups: []
 })
+
+// 加载账号数据
+const loadAccounts = async () => {
+  try {
+    const [
+      claudeData,
+      claudeConsoleData,
+      geminiData,
+      geminiApiData,
+      openaiData,
+      openaiResponsesData,
+      bedrockData,
+      droidData,
+      groupsData
+    ] = await Promise.all([
+      httpApis.getClaudeAccountsApi(),
+      httpApis.getClaudeConsoleAccountsApi(),
+      httpApis.getGeminiAccountsApi(),
+      httpApis.getGeminiApiAccountsApi(),
+      httpApis.getOpenAIAccountsApi(),
+      httpApis.getOpenAIResponsesAccountsApi(),
+      httpApis.getBedrockAccountsApi(),
+      httpApis.getDroidAccountsApi(),
+      httpApis.getAccountGroupsApi()
+    ])
+
+    // 合并Claude OAuth和Console账户
+    const claudeAccounts = []
+    if (claudeData.success) {
+      claudeData.data?.forEach((account) => {
+        claudeAccounts.push({
+          ...account,
+          platform: 'claude-oauth'
+        })
+      })
+    }
+    if (claudeConsoleData.success) {
+      claudeConsoleData.data?.forEach((account) => {
+        claudeAccounts.push({
+          ...account,
+          platform: 'claude-console'
+        })
+      })
+    }
+
+    // 合并Gemini OAuth和API账号
+    const geminiAccounts = []
+    if (geminiData.success) {
+      geminiData.data?.forEach((account) => {
+        geminiAccounts.push({
+          ...account,
+          platform: 'gemini'
+        })
+      })
+    }
+    if (geminiApiData.success) {
+      geminiApiData.data?.forEach((account) => {
+        geminiAccounts.push({
+          ...account,
+          platform: 'gemini-api'
+        })
+      })
+    }
+
+    // 合并OpenAI和OpenAI-Responses账号
+    const openaiAccounts = []
+    if (openaiData.success) {
+      openaiData.data?.forEach((account) => {
+        openaiAccounts.push({
+          ...account,
+          platform: 'openai'
+        })
+      })
+    }
+    if (openaiResponsesData.success) {
+      openaiResponsesData.data?.forEach((account) => {
+        openaiAccounts.push({
+          ...account,
+          platform: 'openai-responses'
+        })
+      })
+    }
+
+    accounts.value = {
+      claude: claudeAccounts,
+      gemini: geminiAccounts,
+      openai: openaiAccounts,
+      bedrock: bedrockData.success ? bedrockData.data || [] : [],
+      droid: droidData.success
+        ? (droidData.data || []).map((account) => ({
+            ...account,
+            platform: 'droid'
+          }))
+        : [],
+      claudeGroups: groupsData.success
+        ? (groupsData.data || []).filter((g) => g.platform === 'claude')
+        : [],
+      geminiGroups: groupsData.success
+        ? (groupsData.data || []).filter((g) => g.platform === 'gemini')
+        : [],
+      openaiGroups: groupsData.success
+        ? (groupsData.data || []).filter((g) => g.platform === 'openai')
+        : [],
+      droidGroups: groupsData.success
+        ? (groupsData.data || []).filter((g) => g.platform === 'droid')
+        : []
+    }
+  } catch (error) {
+    console.error('加载账号数据失败:', error)
+  }
+}
 
 // Load templates
 const loadTemplates = async () => {
@@ -341,33 +349,12 @@ const loadTemplates = async () => {
 // Open create modal
 const openCreateModal = () => {
   editingTemplate.value = null
-  formData.value = {
-    templateName: '',
-    description: '',
-    dailyLimit: null,
-    concurrentLimit: null,
-    rateLimit: null,
-    permissions: [],
-    allowedClientTypes: [],
-    blockedModels: [],
-    quotaCardId: null,
-    bindingAccounts: [],
-    serviceRates: {},
-    tags: [],
-    expiresIn: null,
-    concurrentRequestQueueEnabled: false,
-    concurrentRequestQueueMaxSize: 3,
-    concurrentRequestQueueTimeoutMs: 10000
-  }
-  tagsInput.value = ''
   showModal.value = true
 }
 
 // Open edit modal
 const openEditModal = (template) => {
   editingTemplate.value = template
-  formData.value = { ...template }
-  tagsInput.value = template.tags ? template.tags.join(', ') : ''
   showModal.value = true
 }
 
@@ -377,42 +364,9 @@ const closeModal = () => {
   editingTemplate.value = null
 }
 
-// Save template
-const saveTemplate = async () => {
-  if (!formData.value.templateName.trim()) {
-    showToast('请输入模板名称', 'error')
-    return
-  }
-
-  // Parse tags
-  if (tagsInput.value.trim()) {
-    formData.value.tags = tagsInput.value
-      .split(',')
-      .map((t) => t.trim())
-      .filter((t) => t)
-  } else {
-    formData.value.tags = []
-  }
-
-  try {
-    let res
-    if (editingTemplate.value) {
-      res = await httpApis.updateApiKeyTemplateApi(editingTemplate.value.id, formData.value)
-    } else {
-      res = await httpApis.createApiKeyTemplateApi(formData.value)
-    }
-
-    if (res.success) {
-      showToast(`模板${editingTemplate.value ? '更新' : '创建'}成功`, 'success')
-      closeModal()
-      await loadTemplates()
-    } else {
-      showToast(res.message || '操作失败', 'error')
-    }
-  } catch (error) {
-    console.error('保存模板失败:', error)
-    showToast('保存模板失败', 'error')
-  }
+// Handle template success
+const handleTemplateSuccess = () => {
+  loadTemplates()
 }
 
 // Delete template
@@ -457,8 +411,9 @@ const createKeyFromTemplate = async () => {
     if (res.success) {
       showToast(`API Key "${newKeyName.value}" 创建成功`, 'success')
       showCreateKeyModal.value = false
-      // 跳转到 API Keys 页面
-      router.push('/admin-next/api-keys')
+      // 显示新创建的Key弹窗
+      newApiKeyData.value = res.data
+      showNewApiKeyModal.value = true
     } else {
       showToast(res.message || '创建失败', 'error')
     }
@@ -481,7 +436,8 @@ const formatDate = (dateString) => {
 }
 
 // Load on mount
-onMounted(() => {
-  loadTemplates()
+onMounted(async () => {
+  await loadAccounts()
+  await loadTemplates()
 })
 </script>

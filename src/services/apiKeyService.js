@@ -176,7 +176,7 @@ class ApiKeyService {
       id: keyId,
       name,
       description,
-      apiKey: hashedKey,
+      apiKey: hashedKey, // 哈希值用于验证
       tokenLimit: String(tokenLimit ?? 0),
       concurrencyLimit: String(concurrencyLimit ?? 0),
       rateLimitWindow: String(rateLimitWindow ?? 0),

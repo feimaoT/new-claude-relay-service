@@ -23,110 +23,26 @@
 
         <form
           class="modal-scroll-content custom-scrollbar flex-1 space-y-4"
-          @submit.prevent="createApiKey"
+          @submit.prevent="saveTemplate"
         >
-          <!-- 创建类型选择 -->
-          <div
-            class="rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-3 dark:border-blue-700 dark:from-blue-900/20 dark:to-indigo-900/20 sm:p-4"
-          >
-            <div
-              :class="[
-                'flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between',
-                form.createType === 'batch' ? 'mb-3' : ''
-              ]"
-            >
-              <label
-                class="flex h-full items-center text-xs font-semibold text-gray-700 dark:text-gray-300 sm:text-sm"
-                >创建类型</label
-              >
-              <div class="flex items-center gap-3 sm:gap-4">
-                <label class="flex cursor-pointer items-center">
-                  <input
-                    v-model="form.createType"
-                    class="mr-1.5 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 sm:mr-2"
-                    type="radio"
-                    value="single"
-                  />
-                  <span
-                    class="flex items-center text-xs text-gray-700 dark:text-gray-300 sm:text-sm"
-                  >
-                    <i class="fas fa-key mr-1 text-xs" />
-                    单个创建
-                  </span>
-                </label>
-                <label class="flex cursor-pointer items-center">
-                  <input
-                    v-model="form.createType"
-                    class="mr-1.5 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 sm:mr-2"
-                    type="radio"
-                    value="batch"
-                  />
-                  <span
-                    class="flex items-center text-xs text-gray-700 dark:text-gray-300 sm:text-sm"
-                  >
-                    <i class="fas fa-layer-group mr-1 text-xs" />
-                    批量创建
-                  </span>
-                </label>
-              </div>
-            </div>
-
-            <!-- 批量创建数量输入 -->
-            <div v-if="form.createType === 'batch'" class="mt-3">
-              <div class="flex items-center gap-4">
-                <div class="flex-1">
-                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
-                    >创建数量</label
-                  >
-                  <div class="flex items-center gap-2">
-                    <input
-                      v-model.number="form.batchCount"
-                      class="form-input w-full border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-400"
-                      max="500"
-                      min="2"
-                      placeholder="输入数量 (2-500)"
-                      required
-                      type="number"
-                    />
-                    <div class="whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
-                      最大支持 500 个
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <p class="mt-2 flex items-start text-xs text-amber-600 dark:text-amber-400">
-                <i class="fas fa-info-circle mr-1 mt-0.5 flex-shrink-0" />
-                <span
-                  >批量创建时，每个 Key 的名称会自动添加序号后缀，例如：{{
-                    form.name || 'MyKey'
-                  }}_1, {{ form.name || 'MyKey' }}_2 ...</span
-                >
-              </p>
-            </div>
-          </div>
-
           <div>
             <label
               class="mb-1.5 block text-xs font-semibold text-gray-700 dark:text-gray-300 sm:mb-2 sm:text-sm"
-              >名称 <span class="text-red-500">*</span></label
+              >模板名称 <span class="text-red-500">*</span></label
             >
             <div>
               <input
-                v-model="form.name"
+                v-model="form.templateName"
                 class="form-input flex-1 border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-400"
-                :class="{ 'border-red-500': errors.name }"
-                :placeholder="
-                  form.createType === 'batch'
-                    ? '输入基础名称（将自动添加序号）'
-                    : '为您的 API Key 取一个名称'
-                "
+                :class="{ 'border-red-500': errors.templateName }"
+                placeholder="为您的模板取一个名称"
                 required
                 type="text"
-                @input="errors.name = ''"
+                @input="errors.templateName = ''"
               />
             </div>
-            <p v-if="errors.name" class="mt-1 text-xs text-red-500 dark:text-red-400">
-              {{ errors.name }}
+            <p v-if="errors.templateName" class="mt-1 text-xs text-red-500 dark:text-red-400">
+              {{ errors.templateName }}
             </p>
           </div>
 
@@ -918,8 +834,8 @@
               type="submit"
             >
               <div v-if="loading" class="loading-spinner mr-2" />
-              <i v-else class="fas fa-plus mr-2" />
-              {{ loading ? '创建中...' : '创建' }}
+              <i v-else class="fas fa-save mr-2" />
+              {{ loading ? (isEditing ? '更新中...' : '创建中...') : isEditing ? '更新' : '创建' }}
             </button>
           </div>
         </form>
@@ -941,7 +857,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { showToast } from '@/utils/tools'
 import { useClientsStore } from '@/stores/clients'
 import { useApiKeysStore } from '@/stores/apiKeys'
@@ -963,15 +879,22 @@ const props = defineProps({
       openaiGroups: [],
       droidGroups: []
     })
+  },
+  template: {
+    type: Object,
+    default: null
   }
 })
 
-const emit = defineEmits(['close', 'success', 'batch-success'])
+const emit = defineEmits(['close', 'success'])
 
 const clientsStore = useClientsStore()
 const apiKeysStore = useApiKeysStore()
 const loading = ref(false)
 const accountsLoading = ref(false)
+
+// 是否编辑模式
+const isEditing = computed(() => !!props.template)
 
 // ConfirmModal 状态
 const showConfirmModal = ref(false)
@@ -1020,7 +943,7 @@ const localAccounts = ref({
 
 // 表单验证状态
 const errors = ref({
-  name: ''
+  templateName: ''
 })
 
 // 标签相关
@@ -1049,9 +972,7 @@ const availableServices = [
 
 // 表单数据
 const form = reactive({
-  createType: 'single',
-  batchCount: 10,
-  name: '',
+  templateName: '',
   description: '',
   serviceRates: {}, // API Key 级别服务倍率
   rateLimitWindow: '',
@@ -1085,6 +1006,54 @@ const form = reactive({
 const updatePermissions = () => {
   // form.permissions 已经是数组，由 v-model 自动管理
 }
+
+// 监听模板数据，编辑模式下填充表单
+watch(
+  () => props.template,
+  (template) => {
+    if (template) {
+      // 编辑模式：填充表单数据
+      form.templateName = template.templateName || ''
+      form.description = template.description || ''
+      form.serviceRates = template.serviceRates || {}
+      form.rateLimitWindow = template.rateLimitWindow || ''
+      form.rateLimitRequests = template.rateLimitRequests || ''
+      form.rateLimitCost = template.rateLimitCost || ''
+      form.concurrencyLimit = template.concurrencyLimit || ''
+      form.dailyCostLimit = template.dailyCostLimit || ''
+      form.totalCostLimit = template.totalCostLimit || ''
+      form.weeklyOpusCostLimit = template.weeklyOpusCostLimit || ''
+      form.expireDuration = template.expireDuration || ''
+      form.customExpireDate = template.customExpireDate || ''
+      form.expiresAt = template.expiresAt || null
+      form.expirationMode = template.expirationMode || 'fixed'
+      form.activationDays = template.activationDays || 30
+      form.activationUnit = template.activationUnit || 'days'
+      form.permissions = Array.isArray(template.permissions) ? template.permissions : []
+      form.claudeAccountId = template.claudeAccountId || ''
+      form.geminiAccountId = template.geminiAccountId || ''
+      form.openaiAccountId = template.openaiAccountId || ''
+      form.bedrockAccountId = template.bedrockAccountId || ''
+      form.droidAccountId = template.droidAccountId || ''
+      form.enableModelRestriction = template.enableModelRestriction || false
+      form.restrictedModels = Array.isArray(template.restrictedModels)
+        ? template.restrictedModels
+        : []
+      form.modelInput = ''
+      form.enableClientRestriction = template.enableClientRestriction || false
+      form.allowedClients = Array.isArray(template.allowedClients) ? template.allowedClients : []
+      form.tags = Array.isArray(template.tags) ? template.tags : []
+
+      // 如果有服务倍率数据，启用服务倍率开关
+      if (template.serviceRates && Object.keys(template.serviceRates).length > 0) {
+        enableServiceRates.value = true
+      } else {
+        enableServiceRates.value = false
+      }
+    }
+  },
+  { immediate: true }
+)
 
 // 加载支持的客户端和已存在的标签
 onMounted(async () => {
@@ -1417,22 +1386,14 @@ const updateActivationValue = () => {
   }
 }
 
-// 创建 API Key
-const createApiKey = async () => {
+// 保存模板（创建或更新）
+const saveTemplate = async () => {
   // 验证表单
-  errors.value.name = ''
+  errors.value.templateName = ''
 
-  if (!form.name || !form.name.trim()) {
-    errors.value.name = '请输入API Key名称'
+  if (!form.templateName || !form.templateName.trim()) {
+    errors.value.templateName = '请输入模板名称'
     return
-  }
-
-  // 批量创建时验证数量
-  if (form.createType === 'batch') {
-    if (!form.batchCount || form.batchCount < 2 || form.batchCount > 500) {
-      showToast('批量创建数量必须在 2-500 之间', 'error')
-      return
-    }
   }
 
   // 检查是否设置了时间窗口但费用限制为0
@@ -1440,7 +1401,7 @@ const createApiKey = async () => {
     const confirmed = await showConfirm(
       '费用限制提醒',
       '您设置了时间窗口但费用限制为0，这意味着不会有费用限制。\n\n是否继续？',
-      '继续创建',
+      '继续' + (isEditing.value ? '更新' : '创建'),
       '返回修改',
       'warning'
     )
@@ -1463,7 +1424,8 @@ const createApiKey = async () => {
       }
     }
 
-    const baseData = {
+    const templateData = {
+      templateName: form.templateName,
       description: form.description || undefined,
       serviceRates: filteredServiceRates,
       tokenLimit: 0, // 设置为0，清除历史token限制
@@ -1496,6 +1458,10 @@ const createApiKey = async () => {
           ? parseFloat(form.weeklyOpusCostLimit)
           : 0,
       expiresAt: form.expirationMode === 'fixed' ? form.expiresAt || undefined : undefined,
+      expireDuration:
+        form.expirationMode === 'fixed' ? form.expireDuration || undefined : undefined,
+      customExpireDate:
+        form.expirationMode === 'fixed' ? form.customExpireDate || undefined : undefined,
       expirationMode: form.expirationMode,
       activationDays: form.expirationMode === 'activation' ? form.activationDays : undefined,
       activationUnit: form.expirationMode === 'activation' ? form.activationUnit : undefined,
@@ -1511,72 +1477,53 @@ const createApiKey = async () => {
     if (form.claudeAccountId) {
       if (form.claudeAccountId.startsWith('console:')) {
         // Claude Console账户
-        baseData.claudeConsoleAccountId = form.claudeAccountId.substring(8)
+        templateData.claudeConsoleAccountId = form.claudeAccountId.substring(8)
         // 确保不会同时设置OAuth账号
-        delete baseData.claudeAccountId
+        delete templateData.claudeAccountId
       } else {
         // Claude OAuth账户或分组
-        baseData.claudeAccountId = form.claudeAccountId
+        templateData.claudeAccountId = form.claudeAccountId
         // 确保不会同时设置Console账号
-        delete baseData.claudeConsoleAccountId
+        delete templateData.claudeConsoleAccountId
       }
     }
 
     // Gemini账户绑定
     if (form.geminiAccountId) {
-      baseData.geminiAccountId = form.geminiAccountId
+      templateData.geminiAccountId = form.geminiAccountId
     }
 
     // OpenAI账户绑定
     if (form.openaiAccountId) {
-      baseData.openaiAccountId = form.openaiAccountId
+      templateData.openaiAccountId = form.openaiAccountId
     }
 
     // Bedrock账户绑定
     if (form.bedrockAccountId) {
-      baseData.bedrockAccountId = form.bedrockAccountId
+      templateData.bedrockAccountId = form.bedrockAccountId
     }
     if (form.droidAccountId) {
-      baseData.droidAccountId = form.droidAccountId
+      templateData.droidAccountId = form.droidAccountId
     }
 
-    if (form.createType === 'single') {
-      // 单个创建
-      const data = {
-        ...baseData,
-        name: form.name
-      }
-
-      const result = await httpApis.createApiKeyApi(data)
-
-      if (result.success) {
-        showToast('API Key 创建成功', 'success')
-        emit('success', result.data)
-        emit('close')
-      } else {
-        showToast(result.message || '创建失败', 'error')
-      }
+    let result
+    if (isEditing.value) {
+      // 更新模板
+      result = await httpApis.updateApiKeyTemplateApi(props.template.id, templateData)
     } else {
-      // 批量创建
-      const data = {
-        ...baseData,
-        createType: 'batch',
-        baseName: form.name,
-        count: form.batchCount
-      }
+      // 创建模板
+      result = await httpApis.createApiKeyTemplateApi(templateData)
+    }
 
-      const result = await httpApis.batchCreateApiKeysApi(data)
-
-      if (result.success) {
-        showToast(`成功创建 ${result.data.length} 个 API Key`, 'success')
-        emit('batch-success', result.data)
-        emit('close')
-      } else {
-        showToast(result.message || '批量创建失败', 'error')
-      }
+    if (result.success) {
+      showToast(`模板${isEditing.value ? '更新' : '创建'}成功`, 'success')
+      emit('success', result.data)
+      emit('close')
+    } else {
+      showToast(result.message || `${isEditing.value ? '更新' : '创建'}失败`, 'error')
     }
   } catch (error) {
-    showToast('创建失败', 'error')
+    showToast(`${isEditing.value ? '更新' : '创建'}失败`, 'error')
   } finally {
     loading.value = false
   }

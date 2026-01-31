@@ -808,20 +808,36 @@ class RedisClient {
       logger.info(`🔍 Searching for key value: ${trimmedSearch.substring(0, 10)}...`)
 
       try {
-        // 验证输入的key是否存在
-        const verifiedKey = await apiKeyService.verifyApiKey(trimmedSearch)
+        // 检查格式是否匹配
+        const prefix = apiKeyService.prefix || 'cr_'
+        if (!trimmedSearch.startsWith(prefix)) {
+          logger.warn(`⚠️ Invalid key format, expected prefix: ${prefix}`)
+          return {
+            items: [],
+            pagination: { page: 1, pageSize, total: 0, totalPages: 0 }
+          }
+        }
+
+        // 直接通过哈希查找key（不检查激活状态、过期等，用于管理后台搜索）
+        const hashedKey = apiKeyService._hashApiKey(trimmedSearch)
+        const keyData = await this.findApiKeyByHash(hashedKey)
 
         logger.info(
-          `🔍 Key verification result: ${verifiedKey ? `found (${verifiedKey.id})` : 'not found'}`
+          `🔍 Key search result: ${keyData ? `found (${keyData.id})` : 'not found in hash map'}`
         )
 
-        if (verifiedKey && verifiedKey.id) {
-          // 找到匹配的key，直接获取完整信息
-          const keyData = await this.get(`api_key:${verifiedKey.id}`)
-          logger.info(`✅ Found matching key: ${verifiedKey.id}`)
+        if (keyData && keyData.id) {
+          // 找到匹配的key，获取完整信息
+          const fullKeyData = await this.getApiKey(keyData.id)
+          logger.info(`✅ Found matching key: ${keyData.id}`)
 
-          // 返回单个key的结果
-          const items = keyData && !keyData.isDeleted ? [keyData] : []
+          // 将搜索输入（原始key值）附加到返回数据中，用于前端显示
+          if (fullKeyData) {
+            fullKeyData.apiKey = trimmedSearch
+          }
+
+          // 返回单个key的结果（即使被删除也返回，由前端过滤）
+          const items = fullKeyData ? [fullKeyData] : []
           return {
             items,
             pagination: {
@@ -833,7 +849,7 @@ class RedisClient {
           }
         } else {
           // 没找到匹配的key，返回空
-          logger.warn('⚠️ No matching key found')
+          logger.warn('⚠️ No matching key found in hash map')
           return {
             items: [],
             pagination: { page: 1, pageSize, total: 0, totalPages: 0 }

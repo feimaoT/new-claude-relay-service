@@ -32,11 +32,36 @@ class ApiKeyTemplateService {
       bindingAccounts = [],
       serviceRates = {},
       tags = [],
-      expiresIn = null,
+      // 新的过期时间相关字段
+      expiresAt = null,
+      expireDuration = null,
+      customExpireDate = null,
+      expirationMode = 'fixed',
+      activationDays = 30,
+      activationUnit = 'days',
+      // 并发队列配置
       concurrentRequestQueueEnabled = false,
       concurrentRequestQueueMaxSize = 3,
       concurrentRequestQueueTimeoutMs = 10000,
-      createdBy = 'admin'
+      createdBy = 'admin',
+      // 其他可能的字段
+      rateLimitWindow,
+      rateLimitRequests,
+      rateLimitCost,
+      concurrencyLimit,
+      dailyCostLimit,
+      totalCostLimit,
+      weeklyOpusCostLimit,
+      claudeAccountId,
+      claudeConsoleAccountId,
+      geminiAccountId,
+      openaiAccountId,
+      bedrockAccountId,
+      droidAccountId,
+      enableModelRestriction,
+      restrictedModels,
+      enableClientRestriction,
+      allowedClients
     } = templateData
 
     // 验证必填字段
@@ -56,20 +81,50 @@ class ApiKeyTemplateService {
       id: templateId,
       templateName: templateName.trim(),
       description: description.trim(),
+      // 速率限制和并发配置
       dailyLimit: dailyLimit || null,
       concurrentLimit: concurrentLimit || null,
       rateLimit: rateLimit || null,
+      rateLimitWindow: rateLimitWindow || null,
+      rateLimitRequests: rateLimitRequests || null,
+      rateLimitCost: rateLimitCost || null,
+      concurrencyLimit: concurrencyLimit || null,
+      // 费用限制
+      dailyCostLimit: dailyCostLimit || null,
+      totalCostLimit: totalCostLimit || null,
+      weeklyOpusCostLimit: weeklyOpusCostLimit || null,
+      // 权限和限制
       permissions: Array.isArray(permissions) ? permissions : [],
       allowedClientTypes: Array.isArray(allowedClientTypes) ? allowedClientTypes : [],
       blockedModels: Array.isArray(blockedModels) ? blockedModels : [],
+      enableModelRestriction: enableModelRestriction || false,
+      restrictedModels: Array.isArray(restrictedModels) ? restrictedModels : [],
+      enableClientRestriction: enableClientRestriction || false,
+      allowedClients: Array.isArray(allowedClients) ? allowedClients : [],
+      // 账户绑定
+      claudeAccountId: claudeAccountId || null,
+      claudeConsoleAccountId: claudeConsoleAccountId || null,
+      geminiAccountId: geminiAccountId || null,
+      openaiAccountId: openaiAccountId || null,
+      bedrockAccountId: bedrockAccountId || null,
+      droidAccountId: droidAccountId || null,
+      // 其他配置
       quotaCardId,
       bindingAccounts: Array.isArray(bindingAccounts) ? bindingAccounts : [],
       serviceRates: serviceRates || {},
       tags: Array.isArray(tags) ? tags : [],
-      expiresIn,
+      // 过期时间配置（新字段）
+      expiresAt,
+      expireDuration,
+      customExpireDate,
+      expirationMode,
+      activationDays,
+      activationUnit,
+      // 并发队列
       concurrentRequestQueueEnabled: concurrentRequestQueueEnabled === true,
       concurrentRequestQueueMaxSize: concurrentRequestQueueMaxSize || 3,
       concurrentRequestQueueTimeoutMs: concurrentRequestQueueTimeoutMs || 10000,
+      // 元数据
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       createdBy
