@@ -5,6 +5,31 @@
 >
 > 或迁移到新一代项目 **[CRS 2.0 (sub2api)](https://github.com/Wei-Shaw/sub2api)**
 
+## 📝 最近更新
+
+### 新增功能
+
+- ✨ **API Key值搜索**: 支持通过完整Key值搜索，使用Hash匹配机制，保证安全性和向后兼容
+- ✨ **API Key值显示**: 列表页面支持显示Key值（默认隐藏为******），带显示/隐藏切换按钮
+- ✨ **模板系统完善**: 修复模板过期时间配置，支持固定时间和激活模式的完整保存和加载
+- ✨ **页面导航优化**: 改进API Keys和Keys模板之间的导航体验，避免标签丢失问题
+- ✨ **一键部署脚本**: 提供完整的部署和更新脚本，支持Ubuntu/CentOS
+- ✨ **仓库迁移脚本**: 支持从官方仓库无缝迁移到自定义仓库，保留所有数据和配置
+
+### 技术改进
+
+- 🔧 **Hash-based搜索**: API Key搜索采用哈希比对方式，避免明文存储和传输
+- 🔧 **配置保留机制**: 更新和迁移时自动保留JWT_SECRET、ENCRYPTION_KEY等关键配置
+- 🔧 **前端UX改进**: 模板管理移至操作栏，增加返回按钮，提升操作流畅度
+- 🔧 **数据完整性**: 模板编辑时保存完整配置（expireDuration、customExpireDate等）
+
+### 修复问题
+
+- 🐛 修复模板过期时间编辑后总是显示"永不过期"的问题
+- 🐛 修复Key值搜索功能无法找到结果的问题
+- 🐛 修复API Keys列表不显示Key值前缀的问题
+- 🐛 修复模板页面和API Keys页面导航互斥的问题
+
 <div align="center">
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -120,6 +145,257 @@
 - **服务器**: 轻量云服务器，一个月30-60块
 - **Claude订阅**: 看你怎么分摊了
 - **其他**: 域名（可选）
+
+---
+
+## 🚀 一键部署脚本（新增）
+
+### 使用场景
+
+本项目提供三种部署脚本，适用于不同场景：
+
+| 脚本 | 适用场景 | 说明                  |
+|------|---------|---------------------|
+| **deploy.sh** | 全新部署 | 首次部署，自动安装所有依赖、配置环境  |
+| **update.sh** | 日常更新 | 已部署的服务进行更新，保留所有配置   |
+| **migrate-to-custom-repo.sh** | 仓库迁移 | 从官方仓库切换到本自定义仓库，保留数据 |
+
+### 脚本1: 全新部署 (deploy.sh)
+
+**适用场景:** 在一台全新的服务器上首次部署本项目
+
+```bash
+# 方法1: 从您的仓库下载脚本
+wget https://raw.githubusercontent.com/你的用户名/你的仓库/main/deploy.sh
+chmod +x deploy.sh
+sudo ./deploy.sh
+
+# 方法2: 如果已经clone了仓库
+cd claude-relay-service
+chmod +x deploy.sh
+sudo ./deploy.sh
+```
+
+**脚本功能:**
+
+1. **环境检测** - 自动识别Ubuntu/Debian或CentOS/RHEL系统
+2. **依赖安装** - 自动安装Node.js 18+、Redis、PM2、Git
+3. **代码克隆** - 支持自定义Git仓库地址（默认官方仓库）
+4. **配置生成** - 自动生成随机的JWT_SECRET和ENCRYPTION_KEY（32位）
+5. **交互配置** - 询问Redis地址、端口、密码、服务端口等
+6. **依赖安装** - npm install（后端+前端）
+7. **前端构建** - npm run build:web
+8. **初始化** - npm run setup（生成管理员账号）
+9. **服务启动** - 自动启动服务并显示访问地址
+
+**部署过程交互:**
+
+```
+请输入您的 Git 仓库地址 (默认: https://github.com/Wei-Shaw/claude-relay-service.git):
+> https://github.com/你的用户名/你的仓库.git
+
+请输入安装目录 (默认: /opt/claude-relay-service):
+> /opt/my-service
+
+Redis 地址 (默认: localhost):
+> localhost
+
+Redis 端口 (默认: 6379):
+> 6379
+
+Redis 密码 (默认: 无密码,直接回车跳过):
+>
+
+服务端口 (默认: 3000):
+> 3000
+```
+
+**部署完成后会显示:**
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎉 Claude Relay Service 部署完成!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📍 访问地址:
+  - 本地访问: http://localhost:3000/admin-next/login
+  - 外网访问: http://YOUR_IP:3000/admin-next/login
+
+🔑 管理员凭据:
+  - 查看方式: cat /opt/claude-relay-service/data/init.json
+
+📊 服务管理命令:
+  - 查看状态: npm run service:status
+  - 查看日志: npm run service:logs
+  - 重启服务: npm run service:restart:daemon
+  - 停止服务: npm run service:stop
+
+🔄 更新服务:
+  - 使用更新脚本: cd /opt/claude-relay-service && ./update.sh
+
+⚠️  重要提示:
+  1. 请妥善保管 .env 文件中的密钥
+  2. 建议配置防火墙,仅开放必要端口
+  3. 生产环境建议使用 Nginx/Caddy 反向代理
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+### 脚本2: 日常更新 (update.sh)
+
+**适用场景:** 已经部署运行的服务，需要拉取最新代码并更新
+
+```bash
+# 进入项目目录
+cd /opt/claude-relay-service
+
+# 运行更新脚本
+./update.sh
+```
+
+**脚本功能:**
+
+1. **配置备份** - 自动备份.env、config.js、data目录到`backup_时间戳/`
+2. **代码拉取** - git pull获取最新代码（自动处理package-lock.json冲突）
+3. **配置恢复** - 智能恢复配置（对比差异、可选择使用新/旧配置）
+4. **配置验证** - 验证JWT_SECRET、ENCRYPTION_KEY等关键配置
+5. **依赖更新** - npm install更新后端和前端依赖
+6. **前端构建** - 重新构建前端
+7. **服务重启** - 优雅重启服务
+8. **旧备份清理** - 自动保留最近5个备份，清理更旧的
+
+**更新过程示例:**
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Claude Relay Service - 服务更新脚本
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[INFO] 备份配置文件...
+[SUCCESS] 已备份: .env
+[SUCCESS] 已备份: config/config.js
+[SUCCESS] 已备份: data 目录
+[SUCCESS] 配置文件备份完成: backup_20260130_143000
+
+[INFO] 拉取最新代码...
+[INFO] 当前分支: main
+[SUCCESS] 代码更新成功
+
+[INFO] 恢复配置文件...
+[WARNING] .env 文件有变化
+是否使用备份的配置? (y/n)
+> y
+[SUCCESS] 已恢复: .env
+
+[INFO] 验证配置文件...
+[SUCCESS] 配置验证通过
+
+[INFO] 安装后端依赖...
+[INFO] 安装前端依赖...
+[SUCCESS] 依赖安装完成
+
+[INFO] 构建前端...
+[SUCCESS] 前端构建完成
+
+[INFO] 重启服务...
+[SUCCESS] 服务重启成功
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎉 服务更新完成!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+### 脚本3: 仓库迁移 (migrate-to-custom-repo.sh)
+
+**适用场景:** 之前使用官方仓库部署，现在想切换到自己fork/修改的仓库
+
+详细说明请查看下方"从官方仓库迁移到自定义仓库"章节。
+
+---
+
+### 脚本对比表
+
+| 功能 | deploy.sh | update.sh | migrate-to-custom-repo.sh |
+|------|-----------|-----------|---------------------------|
+| 安装系统依赖 | ✅ | ❌ | ❌ |
+| 克隆代码 | ✅ | ❌ | ❌ |
+| 生成新密钥 | ✅ | ❌ | ❌ |
+| 保留现有密钥 | ❌ | ✅ | ✅ |
+| 备份配置 | ❌ | ✅ | ✅ |
+| 备份Redis数据 | ❌ | ❌ | ✅ |
+| 切换Git仓库 | ❌ | ❌ | ✅ |
+| 更新代码 | ❌ | ✅ | ✅ |
+| 构建服务 | ✅ | ✅ | ✅ |
+| 启动服务 | ✅ | ✅ | ✅ |
+
+### 常见问题
+
+**Q: 脚本需要root权限吗？**
+
+A: `deploy.sh`需要root权限（安装系统依赖），`update.sh`和`migrate-to-custom-repo.sh`不需要（如果服务是以普通用户运行）。
+
+**Q: 密钥会丢失吗？**
+
+A: 不会。`update.sh`和`migrate-to-custom-repo.sh`都会自动保留JWT_SECRET和ENCRYPTION_KEY，这是数据解密的关键。
+
+**Q: 备份文件占用空间怎么办？**
+
+A: `update.sh`会自动保留最近5个备份并清理旧备份。手动清理: `rm -rf backup_*`
+
+**Q: 如何验证更新成功？**
+
+A:
+1. 检查服务状态: `npm run service:status`
+2. 查看日志: `npm run service:logs`
+3. 访问管理后台测试功能
+4. 查看Git提交: `git log -1`
+
+**Q: 更新失败怎么回滚？**
+
+A:
+```bash
+# 恢复配置
+cp backup_最新时间戳/.env .env
+cp backup_最新时间戳/config.js config/config.js
+
+# 回退代码
+git reset --hard HEAD~1
+
+# 重启服务
+npm run service:restart:daemon
+```
+
+---
+
+## 🚀 一键部署脚本（推荐）
+
+### 自定义部署脚本
+
+如果您需要使用自己的Git仓库或需要更多自定义配置,可以使用我们提供的一键部署脚本:
+
+```bash
+# 下载部署脚本
+wget https://raw.githubusercontent.com/你的用户名/你的仓库/main/deploy.sh
+chmod +x deploy.sh
+
+# 运行部署脚本(需要root权限)
+sudo ./deploy.sh
+```
+
+**部署脚本功能:**
+
+- ✅ **自动检测系统**: 支持 Ubuntu/Debian、CentOS/RHEL
+- ✅ **安装所有依赖**: Node.js 18+、Redis、PM2、Git
+- ✅ **自定义Git仓库**: 可使用您自己的Git仓库地址
+- ✅ **自动生成密钥**: 自动生成 JWT_SECRET 和 ENCRYPTION_KEY
+- ✅ **交互式配置**: 友好的配置向导,设置端口、Redis连接等
+- ✅ **自动启动服务**: 部署完成后自动启动并显示访问信息
+
+**部署过程中会询问:**
+
+1. Git仓库地址(默认官方仓库)
+2. 安装目录(默认 /opt/claude-relay-service)
+3. Redis配置(地址、端口、密码)
+4. 服务端口(默认 3000)
 
 ---
 
@@ -663,13 +939,101 @@ npm run service:stop
 - **健康检查**: `http://你的域名:3000/health` - 确认服务正常
 - **日志文件**: `logs/` 目录下的各种日志文件
 
-### 升级指南
+### 从官方仓库迁移到自定义仓库
 
-当有新版本发布时，按照以下步骤升级服务：
+如果您之前使用官方一键脚本部署，现在想切换到自己的Git仓库（比如fork后修改的代码），可以使用迁移脚本：
+
+**适用场景:**
+- ✅ 已经使用官方仓库部署并运行了一段时间
+- ✅ 有生产数据（Redis数据、API Keys、用户配置等）
+- ✅ 现在想切换到自己fork的仓库或修改过的代码
+- ✅ 需要保留所有现有的配置、密钥、数据
+
+**迁移步骤:**
+
+```bash
+# 1. 进入当前运行的项目目录
+cd /opt/claude-relay-service  # 根据实际路径调整
+
+# 2. 下载迁移脚本（如果您的仓库已包含此脚本可跳过）
+wget https://raw.githubusercontent.com/你的用户名/你的仓库/main/migrate-to-custom-repo.sh
+chmod +x migrate-to-custom-repo.sh
+
+# 3. 运行迁移脚本
+./migrate-to-custom-repo.sh
+```
+
+**迁移脚本会自动完成:**
+
+1. ✅ **停止服务** - 安全停止正在运行的服务
+2. ✅ **完整备份** - 备份配置文件(.env, config.js)、数据目录(data/)、Redis数据库
+3. ✅ **提取密钥** - 保存JWT_SECRET和ENCRYPTION_KEY（关键！）
+4. ✅ **切换仓库** - 将Git远程地址切换到您的仓库
+5. ✅ **拉取代码** - 获取您的最新代码
+6. ✅ **恢复配置** - 将关键配置恢复到新代码中
+7. ✅ **安装依赖** - npm install和前端依赖安装
+8. ✅ **构建前端** - npm run build:web
+9. ✅ **启动服务** - 使用新代码启动服务
+10. ✅ **验证迁移** - 检查所有文件和服务状态
+
+**迁移过程中会交互询问:**
+
+1. 您的Git仓库地址（如：https://github.com/your-name/claude-relay-service.git）
+2. 目标分支（默认：main）
+3. 是否使用旧的config.js还是新的模板
+
+**重要说明:**
+
+- 🔐 **密钥保留**: JWT_SECRET和ENCRYPTION_KEY会自动保留，确保数据能正确解密
+- 💾 **数据安全**: Redis数据会完整备份，迁移失败可快速恢复
+- 📁 **备份位置**: 所有备份保存在`migration_backup_时间戳/`目录
+- ⚠️ **测试验证**: 迁移完成后务必测试所有功能
+
+**如果迁移失败需要回滚:**
+
+```bash
+# 恢复.env配置
+cp migration_backup_*/. env .env
+
+# 恢复config.js
+cp migration_backup_*/config.js config/config.js
+
+# 恢复data目录
+cp -r migration_backup_*/data/* data/
+
+# 切回原仓库
+git remote set-url origin https://github.com/Wei-Shaw/claude-relay-service.git
+git fetch origin
+git reset --hard origin/main
+
+# 重启服务
+npm run service:restart:daemon
+```
+
+---
+
+### 日常更新指南（已在自定义仓库）
+
+如果您已经切换到自己的仓库，后续更新使用更新脚本：
+
+```bash
+# 使用自动更新脚本（推荐）
+./update.sh
+```
+
+**更新脚本会自动完成:**
+- ✅ 备份当前配置
+- ✅ 拉取最新代码
+- ✅ 保留JWT_SECRET和ENCRYPTION_KEY
+- ✅ 安装新依赖
+- ✅ 重新构建前端
+- ✅ 重启服务
+
+**手动更新步骤:**
 
 ```bash
 # 1. 进入项目目录
-cd claude-relay-service
+cd /opt/claude-relay-service
 
 # 2. 拉取最新代码
 git pull origin main
@@ -697,6 +1061,7 @@ npm run service:status
 - 升级前建议备份重要配置文件（.env, config/config.js）
 - 查看更新日志了解是否有破坏性变更
 - 如果有数据库结构变更，会自动迁移
+- JWT_SECRET和ENCRYPTION_KEY必须保持不变，否则无法解密现有数据
 
 ---
 
