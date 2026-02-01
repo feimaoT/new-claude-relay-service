@@ -169,9 +169,8 @@ install_git() {
 
 # 克隆代码仓库
 clone_repository() {
-    log_info "请输入您的 Git 仓库地址 (默认: https://github.com/Wei-Shaw/claude-relay-service.git):"
-    read -r GIT_REPO
-    GIT_REPO=${GIT_REPO:-"https://github.com/Wei-Shaw/claude-relay-service.git"}
+    # 使用项目固定的仓库地址
+    GIT_REPO="https://github.com/feimaoT/new-claude-relay-service.git"
 
     log_info "请输入安装目录 (默认: /opt/claude-relay-service):"
     read -r INSTALL_DIR
@@ -342,6 +341,8 @@ main() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  Claude Relay Service - 一键部署脚本"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    log_info "Git 仓库: https://github.com/feimaoT/new-claude-relay-service.git"
     echo ""
 
     check_root

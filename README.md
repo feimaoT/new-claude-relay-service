@@ -180,7 +180,7 @@ sudo ./deploy.sh
 
 1. **环境检测** - 自动识别Ubuntu/Debian或CentOS/RHEL系统
 2. **依赖安装** - 自动安装Node.js 18+、Redis、PM2、Git
-3. **代码克隆** - 支持自定义Git仓库地址（默认官方仓库）
+3. **代码克隆** - 从项目仓库克隆代码（https://github.com/feimaoT/new-claude-relay-service.git）
 4. **配置生成** - 自动生成随机的JWT_SECRET和ENCRYPTION_KEY（32位）
 5. **交互配置** - 询问Redis地址、端口、密码、服务端口等
 6. **依赖安装** - npm install（后端+前端）
@@ -191,8 +191,7 @@ sudo ./deploy.sh
 **部署过程交互:**
 
 ```
-请输入您的 Git 仓库地址 (默认: https://github.com/Wei-Shaw/claude-relay-service.git):
-> https://github.com/feimaoT/new-claude-relay-service.git
+Git 仓库: https://github.com/feimaoT/new-claude-relay-service.git
 
 请输入安装目录 (默认: /opt/claude-relay-service):
 > /opt/my-service
@@ -368,9 +367,9 @@ npm run service:restart:daemon
 
 ## 🚀 一键部署脚本（推荐）
 
-### 自定义部署脚本
+### 一键部署脚本
 
-如果您需要使用自己的Git仓库或需要更多自定义配置,可以使用我们提供的一键部署脚本:
+快速部署本项目到您的服务器，使用我们提供的一键部署脚本：
 
 ```bash
 # 下载部署脚本
@@ -385,17 +384,16 @@ sudo ./deploy.sh
 
 - ✅ **自动检测系统**: 支持 Ubuntu/Debian、CentOS/RHEL
 - ✅ **安装所有依赖**: Node.js 18+、Redis、PM2、Git
-- ✅ **自定义Git仓库**: 可使用您自己的Git仓库地址
+- ✅ **自动克隆代码**: 自动从项目仓库克隆最新代码
 - ✅ **自动生成密钥**: 自动生成 JWT_SECRET 和 ENCRYPTION_KEY
 - ✅ **交互式配置**: 友好的配置向导,设置端口、Redis连接等
 - ✅ **自动启动服务**: 部署完成后自动启动并显示访问信息
 
 **部署过程中会询问:**
 
-1. Git仓库地址(默认官方仓库)
-2. 安装目录(默认 /opt/claude-relay-service)
-3. Redis配置(地址、端口、密码)
-4. 服务端口(默认 3000)
+1. 安装目录(默认 /opt/claude-relay-service)
+2. Redis配置(地址、端口、密码)
+3. 服务端口(默认 3000)
 
 ---
 
@@ -978,9 +976,8 @@ chmod +x migrate-to-custom-repo.sh
 
 **迁移过程中会交互询问:**
 
-1. 您的Git仓库地址（如：https://github.com/feimaoT/new-claude-relay-service.git）
-2. 目标分支（默认：main）
-3. 是否使用旧的config.js还是新的模板
+1. 是否继续迁移（确认操作）
+2. 是否使用旧的config.js还是新的模板
 
 **重要说明:**
 
@@ -988,6 +985,7 @@ chmod +x migrate-to-custom-repo.sh
 - 💾 **数据安全**: Redis数据会完整备份，迁移失败可快速恢复
 - 📁 **备份位置**: 所有备份保存在`migration_backup_时间戳/`目录
 - ⚠️ **测试验证**: 迁移完成后务必测试所有功能
+- 🎯 **目标仓库**: 脚本会自动切换到 https://github.com/feimaoT/new-claude-relay-service.git
 
 **如果迁移失败需要回滚:**
 
@@ -1001,8 +999,9 @@ cp migration_backup_*/config.js config/config.js
 # 恢复data目录
 cp -r migration_backup_*/data/* data/
 
-# 切回原仓库
-git remote set-url origin https://github.com/Wei-Shaw/claude-relay-service.git
+# 切回原仓库（从backup中查看旧仓库地址）
+cat migration_backup_*/git_info.txt
+git remote set-url origin <旧仓库地址>
 git fetch origin
 git reset --hard origin/main
 

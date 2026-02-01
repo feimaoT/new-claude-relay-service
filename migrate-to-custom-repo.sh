@@ -2,7 +2,7 @@
 
 ################################################################################
 # Claude Relay Service - Git仓库迁移脚本
-# 功能: 从官方仓库切换到自定义仓库，保留所有生产数据和配置
+# 功能: 从其他仓库切换到本项目仓库，保留所有生产数据和配置
 ################################################################################
 
 set -e  # 遇到错误立即退出
@@ -43,7 +43,7 @@ show_welcome() {
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  Claude Relay Service - Git仓库迁移脚本"
-    echo "  从官方仓库切换到您的自定义仓库，保留所有数据"
+    echo "  从其他仓库切换到本项目仓库，保留所有数据"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     log_warning "⚠️  重要提示:"
@@ -230,19 +230,13 @@ extract_key_configs() {
 switch_git_repo() {
     log_info "准备切换Git仓库..."
     echo ""
-    log_info "请输入您的Git仓库地址:"
-    log_info "  示例: https://github.com/your-username/claude-relay-service.git"
-    log_info "  或者: git@github.com:your-username/claude-relay-service.git"
-    read -r NEW_GIT_REPO
 
-    if [ -z "$NEW_GIT_REPO" ]; then
-        log_error "Git仓库地址不能为空"
-        exit 1
-    fi
+    # 使用项目固定的仓库地址
+    NEW_GIT_REPO="https://github.com/feimaoT/new-claude-relay-service.git"
+    TARGET_BRANCH="main"
 
-    log_info "请输入目标分支（默认: main）:"
-    read -r TARGET_BRANCH
-    TARGET_BRANCH=${TARGET_BRANCH:-"main"}
+    log_info "目标仓库: $NEW_GIT_REPO"
+    log_info "目标分支: $TARGET_BRANCH"
 
     echo ""
     log_warning "即将切换到:"
