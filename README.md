@@ -166,7 +166,7 @@
 
 ```bash
 # 方法1: 从您的仓库下载脚本
-wget https://raw.githubusercontent.com/你的用户名/你的仓库/main/deploy.sh
+wget https://raw.githubusercontent.com/feimaoT/new-claude-relay-service/main/deploy.sh
 chmod +x deploy.sh
 sudo ./deploy.sh
 
@@ -192,7 +192,7 @@ sudo ./deploy.sh
 
 ```
 请输入您的 Git 仓库地址 (默认: https://github.com/Wei-Shaw/claude-relay-service.git):
-> https://github.com/你的用户名/你的仓库.git
+> https://github.com/feimaoT/new-claude-relay-service.git
 
 请输入安装目录 (默认: /opt/claude-relay-service):
 > /opt/my-service
@@ -374,7 +374,7 @@ npm run service:restart:daemon
 
 ```bash
 # 下载部署脚本
-wget https://raw.githubusercontent.com/你的用户名/你的仓库/main/deploy.sh
+wget https://raw.githubusercontent.com/feimaoT/new-claude-relay-service/main/deploy.sh
 chmod +x deploy.sh
 
 # 运行部署脚本(需要root权限)
@@ -491,8 +491,8 @@ sudo systemctl start redis
 
 ```bash
 # 下载项目
-git clone https://github.com/Wei-Shaw//claude-relay-service.git
-cd claude-relay-service
+git clone https://github.com/feimaoT/new-claude-relay-service.git
+cd new-claude-relay-service
 
 # 安装依赖
 npm install
@@ -956,7 +956,7 @@ npm run service:stop
 cd /opt/claude-relay-service  # 根据实际路径调整
 
 # 2. 下载迁移脚本（如果您的仓库已包含此脚本可跳过）
-wget https://raw.githubusercontent.com/你的用户名/你的仓库/main/migrate-to-custom-repo.sh
+wget https://raw.githubusercontent.com/feimaoT/new-claude-relay-service/main/migrate-to-custom-repo.sh
 chmod +x migrate-to-custom-repo.sh
 
 # 3. 运行迁移脚本
@@ -978,7 +978,7 @@ chmod +x migrate-to-custom-repo.sh
 
 **迁移过程中会交互询问:**
 
-1. 您的Git仓库地址（如：https://github.com/your-name/claude-relay-service.git）
+1. 您的Git仓库地址（如：https://github.com/feimaoT/new-claude-relay-service.git）
 2. 目标分支（默认：main）
 3. 是否使用旧的config.js还是新的模板
 
